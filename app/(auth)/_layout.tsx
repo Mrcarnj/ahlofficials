@@ -24,8 +24,18 @@ const tabsLayout = () =>{
                 }
             return <Ionicons name={iconName} size={size} color={color} />;
         },
-        headerShown: route.name === 'home' || route.name === 'profile' ? false : true,
+        headerShown: route.name === 'home' ? false : true,
         })}>
+            <Tabs.Screen name="home" options={{
+                tabBarLabel: 'Home',
+            }}/>
+            <Tabs.Screen name="calendar" options={{
+                tabBarLabel: 'Calendar',
+            }}/>
+            <Tabs.Screen name="profile" options={{
+                headerRight: () => <LogoutButton />,
+                tabBarLabel: 'Profile',
+                }} />
             </Tabs>
     );
 };
