@@ -62,10 +62,10 @@ const styles = StyleSheet.create({
         height: 50,
         },
     button: {
-        margin: 10,
-        backgroundColor: '#007bff',
-        padding: 10,
-        borderRadius: 4,
+        backgroundColor: '#ff6600',
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 15,
         alignItems: 'center',
     },
   });
