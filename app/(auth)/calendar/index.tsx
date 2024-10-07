@@ -58,7 +58,7 @@ export default function CalendarScreen() {
         style={styles.calendar}
         markingType={'custom'}
         markedDates={mockEvents}
-        theme={calendarTheme}
+        theme={calendarTheme as any}
       />
        </View>
     </SafeAreaView>
