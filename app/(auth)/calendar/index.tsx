@@ -1,66 +1,90 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
-import { format } from 'date-fns';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-
-
-
-type RootStackParamList = {
-    eventDetails: { date: string; event: { description: string } };
-  };
-  
-  type CalendarScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'eventDetails'>;
-
+import { format, parse } from 'date-fns';
+import { FIREBASE_AUTH, FIRESTORE_DB } from '../../../config/FirebaseConfig';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
 
-export const mockEvents = {
-    '2024-09-15': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 1' },
-  '2024-09-20': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 2' },
-  '2024-09-25': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 3' },
-  '2024-10-05': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 4' },
-  '2024-10-10': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 5' },
-  '2024-10-15': { customStyles: { container: { backgroundColor: '#ff6600' } }, description: 'Event 6' },
-};
 
 export default function CalendarScreen() {
-    const [currentMonth, setCurrentMonth] = useState(new Date());
-    const navigation = useNavigation<CalendarScreenNavigationProp>();
-  
-    const onMonthChange = (month: DateData) => {
-      setCurrentMonth(new Date(month.timestamp));
-    };
-  
-    const onDayPress = (day: DateData) => {
-      const selectedDate = day.dateString;
-      const event = mockEvents[selectedDate as keyof typeof mockEvents];
-      if (event) {
-        navigation.navigate('eventDetails', { date: selectedDate, event });
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [markedDates, setMarkedDates] = useState({});
+  const [user, setUser] = useState(FIREBASE_AUTH.currentUser);
+
+  useEffect(() => {
+    const fetchUserGames = async () => {
+      if (user) {
+        const userDocRef = collection(FIRESTORE_DB, 'roster');
+        const userQuery = query(userDocRef, where('uid', '==', user.uid));
+        const userSnapshot = await getDocs(userQuery);
+        
+        if (!userSnapshot.empty) {
+          const userData = userSnapshot.docs[0].data();
+          const fullName = `${userData.firstName} ${userData.lastName}`;
+          console.log('User fullName:', fullName); // Add this line to log the fullName
+          
+          const scheduleRef = collection(FIRESTORE_DB, 'schedule');                                                                                                                                                                                                                          
+           const scheduleQuery = query(                                                                                                                                                                                                                                                       
+             scheduleRef,                                                                                                                                                                                                                                                                     
+             where('referee1', '==', fullName)                                                                                                                                                                                                                                                
+           );                                                                                                                                                                                                                                                                                 
+                                                                                                                                                                                                                                                                                              
+           const scheduleSnapshot = await getDocs(scheduleQuery);                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                              
+           console.log('Number of matching documents:', scheduleSnapshot.size);                                                                                                                                                                                                               
+                                                                                                                                                                                                                                                                                              
+           const newMarkedDates = {};                                                                                                                                                                                                                                                         
+           scheduleSnapshot.forEach((doc) => {                                                                                                                                                                                                                                                
+             const gameData = doc.data();                                                                                                                                                                                                                                                     
+             console.log('Game data:', gameData);                                                                                                                                                                                                                                             
+             if (                                                                                                                                                                                                                                                                             
+               gameData.referee1 === fullName ||                                                                                                                                                                                                                                              
+               gameData.referee2 === fullName ||                                                                                                                                                                                                                                              
+               gameData.linesperson1 === fullName ||                                                                                                                                                                                                                                          
+               gameData.linesperson2 === fullName                                                                                                                                                                                                                                             
+             ) {                                                                                                                                                                                                                                                                              
+               const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());                                                                                                                                                                                                           
+               const formattedDate = format(gameDate, 'yyyy-MM-dd');                                                                                                                                                                                                                          
+               newMarkedDates[formattedDate] = {                                                                                                                                                                                                                                              
+                 customStyles: { container: { backgroundColor: '#ff6600' } }                                                                                                                                                                                                                  
+               };                                                                                                                                                                                                                                                                             
+             }                                                                                                                                                                                                                                                                                
+           }); 
+          
+          console.log('Marked dates:', newMarkedDates); // Log the final marked dates
+          setMarkedDates(newMarkedDates);
+        }
       }
     };
 
-    return (
-        <SafeAreaView style={styles.safeArea}>
+    fetchUserGames();
+  }, [user]);
+
+  const onMonthChange = (month: DateData) => {
+    setCurrentMonth(new Date(month.timestamp));
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-      <Calendar
-        current={format(currentMonth, 'yyy-MM-dd')}
-        onMonthChange={onMonthChange}
-        onDayPress={onDayPress}
-        monthFormat={'MMMM yyyy'}
-        enableSwipeMonths={true}
-        hideExtraDays={false}
-        firstDay={0}
-        showFiveWeeks={true}
-        style={styles.calendar}
-        markingType={'custom'}
-        markedDates={mockEvents}
-        theme={calendarTheme as any}
-      />
-       </View>
+        <Calendar
+          current={format(currentMonth, 'yyyy-MM-dd')}
+          onMonthChange={onMonthChange}
+          monthFormat={'MMMM yyyy'}
+          enableSwipeMonths={true}
+          hideExtraDays={false}
+          firstDay={0}
+          showFiveWeeks={true}
+          style={styles.calendar}
+          markingType={'custom'}
+          markedDates={markedDates}
+          theme={calendarTheme as any}
+        />
+      </View>
     </SafeAreaView>
   );
 }
