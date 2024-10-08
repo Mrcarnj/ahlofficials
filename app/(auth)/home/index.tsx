@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAppContext } from '../../context/AppContext';
+import { useAppContext } from '../../../context/AppContext';
 import { format, parse, isToday, isFuture, compareAsc } from 'date-fns';
+import { useRouter } from 'expo-router';
 
 const externalLinks = [
   { title: 'Rulebook', url: 'https://theahl.com/rules' },
@@ -11,6 +12,7 @@ const externalLinks = [
 
 export default function HomeScreen() {
   const { games, loading } = useAppContext();
+  const router = useRouter();
 
   const todayEvent = games.find(game => isToday(parse(game.gameDate, 'MM/dd/yyyy', new Date())));
   const upcomingEvents = games
@@ -18,6 +20,7 @@ export default function HomeScreen() {
     .sort((a, b) => compareAsc(parse(a.gameDate, 'MM/dd/yyyy', new Date()), parse(b.gameDate, 'MM/dd/yyyy', new Date())))
     .slice(0, 3);
 
+    
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
