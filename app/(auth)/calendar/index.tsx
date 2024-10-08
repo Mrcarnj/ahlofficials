@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
 import { format, parse } from 'date-fns';
-import { FIREBASE_AUTH, FIRESTORE_DB } from '../../../config/FirebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useAppContext } from '../../../context/AppContext';
 
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
@@ -23,70 +22,31 @@ type CustomMarking = {
 
 export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [markedDates, setMarkedDates] = useState({});
-  const [user, setUser] = useState(FIREBASE_AUTH.currentUser);
+  const { games, loading } = useAppContext();
 
-  useEffect(() => {
-    const fetchUserGames = async () => {
-      if (user) {
-        const userDocRef = collection(FIRESTORE_DB, 'roster');
-        const userQuery = query(userDocRef, where('uid', '==', user.uid));
-        const userSnapshot = await getDocs(userQuery);
-        
-        if (!userSnapshot.empty) {
-          const userData = userSnapshot.docs[0].data();
-          const fullName = `${userData.firstName} ${userData.lastName}`;
-          
-          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
-          const queries = [
-            query(scheduleRef, where('referee1', '==', fullName)),
-            query(scheduleRef, where('referee2', '==', fullName)),
-            query(scheduleRef, where('linesperson1', '==', fullName)),
-            query(scheduleRef, where('linesperson2', '==', fullName))
-          ];
-
-          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
-          const allDocs = scheduleSnapshots.flatMap(snapshot => snapshot.docs);
-          
-          const newMarkedDates = {};
-          const teamsRef = collection(FIRESTORE_DB, 'teams');
-
-          for (const doc of allDocs) {
-            const gameData = doc.data();
-            const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());
-            const formattedDate = format(gameDate, 'yyyy-MM-dd');
-            const gameTime = gameData.gameTime;
-
-            // Fetch home team abbreviation
-            const homeTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.homeTeam)));
-            const homeTeamAbbr = homeTeamDoc.docs[0]?.data().abbreviation || '';
-
-            // Fetch away team abbreviation
-            const awayTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.awayTeam)));
-            const awayTeamAbbr = awayTeamDoc.docs[0]?.data().abbreviation || '';
-
-            console.log(`Debug - Date: ${formattedDate}`);
-            console.log(`Debug - Home Team City: ${gameData.homeTeam}, Abbreviation: ${homeTeamAbbr}`);
-            console.log(`Debug - Away Team City: ${gameData.awayTeam}, Abbreviation: ${awayTeamAbbr}`);
-
-            newMarkedDates[formattedDate] = {
-              selected: true,
-              text: `${awayTeamAbbr}\n@\n${homeTeamAbbr}`,
-              gameTime: gameTime,
-            };
-          }
-          
-          setMarkedDates(newMarkedDates);
-        }
-      }
+  const markedDates = games.reduce((acc, game) => {
+    const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
+    acc[formattedDate] = {
+      selected: true,
+      text: `${game.awayTeamAbbr}\n@\n${game.homeTeamAbbr}`,
+      gameTime: game.gameTime,
     };
-
-    fetchUserGames();
-  }, [user]);
+    return acc;
+  }, {});
 
   const onMonthChange = (month: DateData) => {
     setCurrentMonth(new Date(month.timestamp));
   };
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+        <ActivityIndicator size="large" color="#ff6600"/>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -187,6 +147,11 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
     borderWidth: 2,
   },
+  loadingText: {
+    fontSize: 18,
+    color: '#fff',
+    textAlign: 'center',
+  },
 });
 
 const calendarTheme = {
@@ -200,7 +165,6 @@ const calendarTheme = {
   textDisabledColor: '#444444',
   arrowColor: '#ff6600',
   monthTextColor: '#ffffff',
-  indicatorColor: '#ff6600',
   textDayFontWeight: '300',
   textMonthFontWeight: 'bold',
   textDayHeaderFontWeight: '300',
@@ -213,44 +177,6 @@ const calendarTheme = {
       marginBottom: 0,
       flexDirection: 'row',
       justifyContent: 'space-around',
-    },
-  },
-  'stylesheet.calendar.header': {
-    header: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingLeft: 10,
-      paddingRight: 10,
-      marginTop: 6,
-      alignItems: 'center',
-    },
-  },
-  'stylesheet.day.basic': {
-    base: {
-      width: calendarWidth / 7,
-      height: (calendarWidth * 1.4) / 6,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 0.5,
-      borderColor: '#333333',
-    },
-    text: {
-      fontSize: 16,
-      fontWeight: '300',
-      color: '#ffffff',
-      backgroundColor: 'transparent',
-      textAlign: 'center',
-    },
-    today: {
-      borderColor: '#ffffff',
-      borderWidth: 1,
-    },
-    todayText: {
-      fontWeight: 'bold',
-      color: '#ffffff',
-    },
-    disabledText: {
-      color: '#444444',
     },
   },
 };

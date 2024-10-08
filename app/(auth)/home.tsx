@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useAppContext } from '../../context/AppContext';
 import { format, parse, isToday, isFuture, compareAsc } from 'date-fns';
 
 const externalLinks = [
@@ -11,59 +10,13 @@ const externalLinks = [
 ];
 
 export default function HomeScreen() {
-  const [user, setUser] = useState(FIREBASE_AUTH.currentUser);
-  const [todayEvent, setTodayEvent] = useState(null);
-  const [upcomingEvents, setUpcomingEvents] = useState([]);
+  const { games, loading } = useAppContext();
 
-  useEffect(() => {
-    const fetchUserGames = async () => {
-      if (user) {
-        const userDocRef = collection(FIRESTORE_DB, 'roster');
-        const userQuery = query(userDocRef, where('uid', '==', user.uid));
-        const userSnapshot = await getDocs(userQuery);
-        
-        if (!userSnapshot.empty) {
-          const userData = userSnapshot.docs[0].data();
-          const fullName = `${userData.firstName} ${userData.lastName}`;
-          
-          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
-          const queries = [
-            query(scheduleRef, where('referee1', '==', fullName)),
-            query(scheduleRef, where('referee2', '==', fullName)),
-            query(scheduleRef, where('linesperson1', '==', fullName)),
-            query(scheduleRef, where('linesperson2', '==', fullName))
-          ];
-
-          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
-          const allDocs = scheduleSnapshots.flatMap(snapshot => snapshot.docs);
-          
-          const events = await Promise.all(allDocs.map(async (doc) => {
-            const gameData = doc.data();
-            const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());
-            const formattedDate = format(gameDate, 'MM-dd-yyyy');
-
-            return {
-              date: formattedDate,
-              description: `${gameData.awayTeam} @ ${gameData.homeTeam}`,
-              gameTime: gameData.gameTime,
-            };
-          }));
-
-          const today = new Date();
-          const todayEvent = events.find(event => isToday(parse(event.date, 'MM-dd-yyyy', new Date())));
-          const futureEvents = events
-            .filter(event => isFuture(parse(event.date, 'MM-dd-yyyy', new Date())))
-            .sort((a, b) => compareAsc(parse(a.date, 'MM-dd-yyyy', new Date()), parse(b.date, 'MM-dd-yyyy', new Date())))
-            .slice(0, 3);
-
-          setTodayEvent(todayEvent || null);
-          setUpcomingEvents(futureEvents);
-        }
-      }
-    };
-
-    fetchUserGames();
-  }, [user]);
+  const todayEvent = games.find(game => isToday(parse(game.gameDate, 'MM/dd/yyyy', new Date())));
+  const upcomingEvents = games
+    .filter(game => isFuture(parse(game.gameDate, 'MM/dd/yyyy', new Date())))
+    .sort((a, b) => compareAsc(parse(a.gameDate, 'MM/dd/yyyy', new Date()), parse(b.gameDate, 'MM/dd/yyyy', new Date())))
+    .slice(0, 3);
 
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
@@ -74,14 +27,24 @@ export default function HomeScreen() {
     }
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+        <ActivityIndicator size="large" color="#ff6600"/>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <Text style={styles.title}>Today</Text>
         {todayEvent ? (
           <View style={styles.eventItem}>
-            <Text style={styles.eventDate}>{todayEvent.date}</Text>
-            <Text style={styles.eventDescription}>{todayEvent.description}</Text>
+            <Text style={styles.eventDate}>{format(parse(todayEvent.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
+            <Text style={styles.eventDescription}>{`${todayEvent.awayTeam} @ ${todayEvent.homeTeam}`}</Text>
             <Text style={styles.eventTime}>{todayEvent.gameTime}</Text>
           </View>
         ) : (
@@ -91,8 +54,8 @@ export default function HomeScreen() {
         <Text style={styles.title}>Upcoming Games</Text>
         {upcomingEvents.map((event, index) => (
           <View key={index} style={styles.eventItem}>
-            <Text style={styles.eventDate}>{event.date}</Text>
-            <Text style={styles.eventDescription}>{event.description}</Text>
+            <Text style={styles.eventDate}>{format(parse(event.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
+            <Text style={styles.eventDescription}>{`${event.awayTeam} @ ${event.homeTeam}`}</Text>
             <Text style={styles.eventTime}>{event.gameTime}</Text>
           </View>
         ))}
@@ -171,6 +134,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontStyle: 'italic',
     color: '#888',
+    textAlign: 'center',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#fff',
     textAlign: 'center',
   },
 });

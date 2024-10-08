@@ -1,8 +1,8 @@
 import { ActivityIndicator, View } from "react-native";
 import { AuthProvider, useAuth } from "../context/AuthContext";
+import { AppProvider } from "../context/AppContext";
 import { Slot, useRouter, useSegments } from "expo-router";
 import React, { useEffect } from "react";
-
 
 const InitialLayout = () => {
     const { user, initialized } = useAuth();
@@ -12,7 +12,7 @@ const InitialLayout = () => {
     useEffect(() => {
         if (!initialized) return;
 
-        const inAuthGroup = segments [0] === '(auth)';
+        const inAuthGroup = segments[0] === '(auth)';
 
         if (user && !inAuthGroup) {
             router.replace('/(auth)/home');
@@ -30,12 +30,14 @@ const InitialLayout = () => {
         )}
         </>
     )
-    }
+}
 
 const RootLayout = () => {
     return (
         <AuthProvider>
-            <InitialLayout />
+            <AppProvider>
+                <InitialLayout />
+            </AppProvider>
         </AuthProvider>
     );
 };

@@ -1,52 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TextInput, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TextInput, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
-import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig'; // Adjust the import path as needed
-import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { Ionicons } from "@expo/vector-icons";
+import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig';
+import { doc, updateDoc } from 'firebase/firestore';
+import { useAppContext } from '../../context/AppContext';
 
 export default function ProfileScreen() {
-  const [user, setUser] = useState(FIREBASE_AUTH.currentUser);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
+  const { user, userFullName, gameCount, loading, refreshUserData } = useAppContext();
+  const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState('');
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
-  const [gameCount, setGameCount] = useState(0);
-
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (user) {
-        const userDocRef = doc(FIRESTORE_DB, 'roster', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setFirstName(userData.firstName || '');
-          setLastName(userData.lastName || '');
-          setEmail(userData.email || '');
-          setPhone(userData.phoneNumber || '');
-
-          // Fetch game count
-          const fullName = `${userData.firstName} ${userData.lastName}`;
-          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
-          const queries = [
-            query(scheduleRef, where('referee1', '==', fullName)),
-            query(scheduleRef, where('referee2', '==', fullName)),
-            query(scheduleRef, where('linesperson1', '==', fullName)),
-            query(scheduleRef, where('linesperson2', '==', fullName))
-          ];
-
-          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
-          const totalCount = scheduleSnapshots.reduce((acc, snapshot) => acc + snapshot.size, 0);
-          setGameCount(totalCount);
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [user]);
 
   const handleUpdate = async () => {
     if (user) {
@@ -59,6 +24,7 @@ export default function ProfileScreen() {
         setIsEditingEmail(false);
         setIsEditingPhone(false);
         Alert.alert('Success', 'Profile updated successfully');
+        refreshUserData();
       } catch (error) {
         console.error('Error updating profile:', error);
         Alert.alert('Error', 'Failed to update profile');
@@ -89,6 +55,16 @@ export default function ProfileScreen() {
     </View>
   );
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+        <ActivityIndicator size="large" color="#0000ff"/>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
@@ -96,7 +72,7 @@ export default function ProfileScreen() {
           source={{ uri: 'https://via.placeholder.com/150' }}
           style={styles.profileImage}
         />
-        <Text style={styles.name}>{`${firstName} ${lastName}`}</Text>
+        <Text style={styles.name}>{userFullName}</Text>
         <Text style={styles.gameCount}>Game Count: {gameCount}</Text>
         <View style={styles.infoSection}>
           {renderEditableField(email, setEmail, isEditingEmail, setIsEditingEmail, "Email", "email-address")}
@@ -192,5 +168,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#fff',
     fontWeight: 'bold',
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#fff',
+    textAlign: 'center',
   },
 });
