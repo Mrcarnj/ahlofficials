@@ -20,7 +20,6 @@ export default function HomeScreen() {
     .sort((a, b) => compareAsc(parse(a.gameDate, 'MM/dd/yyyy', new Date()), parse(b.gameDate, 'MM/dd/yyyy', new Date())))
     .slice(0, 3);
 
-    
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
     if (supported) {
@@ -28,6 +27,10 @@ export default function HomeScreen() {
     } else {
       console.log(`Don't know how to open this URL: ${url}`);
     }
+  };
+
+  const navigateToGameDetails = (gameId: string) => {
+    router.push(`/home/${gameId}`);
   };
 
   if (loading) {
@@ -45,22 +48,24 @@ export default function HomeScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <Text style={styles.title}>Today</Text>
         {todayEvent ? (
-          <View style={styles.eventItem}>
+          <TouchableOpacity onPress={() => navigateToGameDetails(todayEvent.id)} style={styles.eventItem}>
             <Text style={styles.eventDate}>{format(parse(todayEvent.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
             <Text style={styles.eventDescription}>{`${todayEvent.awayTeam} @ ${todayEvent.homeTeam}`}</Text>
-            <Text style={styles.eventTime}>{todayEvent.gameTime}</Text>
-          </View>
+            <Text style={styles.eventArena}>{todayEvent.arenaName || 'Arena not specified'}</Text>
+            <Text style={styles.eventTime}>{`${todayEvent.gameTime} ${todayEvent.timeZone || ''}`}</Text>
+          </TouchableOpacity>
         ) : (
           <Text style={styles.noEventText}>No Game Today</Text>
         )}
         <View style={styles.separator} />
         <Text style={styles.title}>Upcoming Games</Text>
         {upcomingEvents.map((event, index) => (
-          <View key={index} style={styles.eventItem}>
+          <TouchableOpacity key={index} onPress={() => navigateToGameDetails(event.id)} style={styles.eventItem}>
             <Text style={styles.eventDate}>{format(parse(event.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
             <Text style={styles.eventDescription}>{`${event.awayTeam} @ ${event.homeTeam}`}</Text>
-            <Text style={styles.eventTime}>{event.gameTime}</Text>
-          </View>
+            <Text style={styles.eventArena}>{event.arenaName || 'Arena not specified'}</Text>
+            <Text style={styles.eventTime}>{`${event.gameTime} ${event.timeZone || ''}`}</Text>
+          </TouchableOpacity>
         ))}
         <View style={styles.separator} />
         <Text style={styles.title}>External Links</Text>
@@ -114,6 +119,12 @@ const styles = StyleSheet.create({
   eventTime: {
     fontSize: 14,
     color: '#888',
+  },
+  eventArena: {
+    fontSize: 14,
+    color: '#888',
+    fontStyle: 'italic',
+    marginBottom: 5,
   },
   separator: {
     marginVertical: 25,

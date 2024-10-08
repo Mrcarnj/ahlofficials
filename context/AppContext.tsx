@@ -61,15 +61,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const teamsRef = collection(FIRESTORE_DB, 'teams');
           
           const homeTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.homeTeam)));
-          const homeTeamAbbr = homeTeamDoc.docs[0]?.data().abbreviation || '';
+          const homeTeamData = homeTeamDoc.docs[0]?.data() || {};
+          const homeTeamAbbr = homeTeamData.abbreviation || '';
+          const arenaName = homeTeamData.arenaName || '';
+          const timeZone = homeTeamData.timeZone || '';
           
           const awayTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.awayTeam)));
-          const awayTeamAbbr = awayTeamDoc.docs[0]?.data().abbreviation || '';
+          const awayTeamAbbr = awayTeamDoc.docs[0]?.data()?.abbreviation || '';
 
           return {
             ...gameData,
             homeTeamAbbr,
             awayTeamAbbr,
+            arenaName,
+            timeZone,
           };
         }));
 

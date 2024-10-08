@@ -10,46 +10,46 @@ const GamePage = () => {
   const [loading, setLoading] = useState(true);
   const [teamAbbreviations, setTeamAbbreviations] = useState({});
 
-  useEffect(() => {
-    const fetchGameAndTeams = async () => {
-      try {
-        const docRef = doc(FIRESTORE_DB, 'schedule', Array.isArray(id) ? id[0] : id);
-        const docSnap = await getDoc(docRef);
-        
-        if (docSnap.exists()) {
-          const gameData = docSnap.data();
-          
-          // Fetch team abbreviations and arena name
-          const teamsRef = collection(FIRESTORE_DB, 'teams');
-          const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
-          const teamsSnapshot = await getDocs(teamsQuery);
-          
-          const abbreviations = {};
-          let arenaName = '';
-          let timeZone = '';
-          teamsSnapshot.forEach((doc) => {
-            const teamData = doc.data();
-            abbreviations[teamData.city] = teamData.abbreviation;
-            if (teamData.city === gameData.homeTeam) {
-              arenaName = teamData.arenaName;
-              timeZone = teamData.timeZone;
-            }
-          });
-
-          setGame({ ...gameData, arenaName, timeZone });
-          setTeamAbbreviations(abbreviations);
-        } else {
-          console.log('No such document!');
-        }
-      } catch (error) {
-        console.error('Error fetching game:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchGameAndTeams();
-  }, [id]);
+  useEffect(() => {                                                                                                                                                                                                                                                                          
+    const fetchGameAndTeams = async () => {                                                                                                                                                                                                                                                  
+      try {                                                                                                                                                                                                                                                                                  
+        const docRef = doc(FIRESTORE_DB, 'schedule', Array.isArray(id) ? id[0] : id);                                                                                                                                                                                                        
+        const docSnap = await getDoc(docRef);                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                             
+        if (docSnap.exists()) {                                                                                                                                                                                                                                                              
+          const gameData = docSnap.data();                                                                                                                                                                                                                                                   
+                                                                                                                                                                                                                                                                                             
+          // Fetch team abbreviations and arena name                                                                                                                                                                                                                                         
+          const teamsRef = collection(FIRESTORE_DB, 'teams');                                                                                                                                                                                                                                
+          const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));                                                                                                                                                                                   
+          const teamsSnapshot = await getDocs(teamsQuery);                                                                                                                                                                                                                                   
+                                                                                                                                                                                                                                                                                             
+          const abbreviations = {};                                                                                                                                                                                                                                                          
+          let arenaName = '';                                                                                                                                                                                                                                                                
+          let timeZone = '';                                                                                                                                                                                                                                                                 
+          teamsSnapshot.forEach((doc) => {                                                                                                                                                                                                                                                   
+            const teamData = doc.data();                                                                                                                                                                                                                                                     
+            abbreviations[teamData.city] = teamData.abbreviation;                                                                                                                                                                                                                            
+            if (teamData.city === gameData.homeTeam) {                                                                                                                                                                                                                                       
+              arenaName = teamData.arenaName;                                                                                                                                                                                                                                                
+              timeZone = teamData.timeZone;                                                                                                                                                                                                                                                  
+            }                                                                                                                                                                                                                                                                                
+          });                                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                             
+          setGame({ ...gameData, arenaName, timeZone });                                                                                                                                                                                                                                     
+          setTeamAbbreviations(abbreviations);                                                                                                                                                                                                                                               
+        } else {                                                                                                                                                                                                                                                                             
+          console.log('No such document!');                                                                                                                                                                                                                                                  
+        }                                                                                                                                                                                                                                                                                    
+      } catch (error) {                                                                                                                                                                                                                                                                      
+        console.error('Error fetching game:', error);                                                                                                                                                                                                                                        
+      } finally {                                                                                                                                                                                                                                                                            
+        setLoading(false);                                                                                                                                                                                                                                                                   
+      }                                                                                                                                                                                                                                                                                      
+    };                                                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                             
+    fetchGameAndTeams();                                                                                                                                                                                                                                                                     
+  }, [id]); 
 
   if (loading) {
     return (
@@ -70,13 +70,13 @@ const GamePage = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.card}>
-      <Text style={styles.gameDate}>{game.gameDate}</Text>
-      <Text style={styles.gameID}>Game# {game.gameID}</Text>
+        <Text style={styles.gameDate}>{game.gameDate}</Text>
+        <Text style={styles.gameID}>Game# {game.gameID}</Text>
         <Text style={styles.teams}>
           {teamAbbreviations[game.awayTeam] || game.awayTeam} @ {teamAbbreviations[game.homeTeam] || game.homeTeam}
         </Text>
-        <Text style={styles.gameTime}>{game.gameTime} {game.timeZone}</Text>
-        <Text style={styles.arena}>{game.arenaName}</Text>
+        <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
+        <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
       </View>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
