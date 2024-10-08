@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, Dimensions } from 'react-native';
+import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
 import { format, parse } from 'date-fns';
@@ -9,6 +9,17 @@ import { collection, query, where, getDocs } from 'firebase/firestore';
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
 
+type CustomMarking = {
+  gameTime?: React.JSX.Element;
+  customStyles?: {
+    container?: ViewStyle;
+    text?: TextStyle;
+  };
+  selected?: boolean;
+  selectedColor?: string;
+  selectedTextColor?: string;
+  text?: string;
+};
 
 export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -25,37 +36,46 @@ export default function CalendarScreen() {
         if (!userSnapshot.empty) {
           const userData = userSnapshot.docs[0].data();
           const fullName = `${userData.firstName} ${userData.lastName}`;
-          console.log('User fullName:', fullName); // Add this line to log the fullName
           
-          const scheduleRef = collection(FIRESTORE_DB, 'schedule');                                                                                                                                                                                                                          
-           const scheduleQuery = query(                                                                                                                                                                                                                                                       
-             scheduleRef,                                                                                                                                                                                                                                                                     
-             where('referee1', '==', fullName)                                                                                                                                                                                                                                                
-           );                                                                                                                                                                                                                                                                                 
-                                                                                                                                                                                                                                                                                              
-           const scheduleSnapshot = await getDocs(scheduleQuery);                                                                                                                                                                                                                             
-                                                                                                                                                                                                                                                                                              
-           console.log('Number of matching documents:', scheduleSnapshot.size);                                                                                                                                                                                                               
-                                                                                                                                                                                                                                                                                              
-           const newMarkedDates = {};                                                                                                                                                                                                                                                         
-           scheduleSnapshot.forEach((doc) => {                                                                                                                                                                                                                                                
-             const gameData = doc.data();                                                                                                                                                                                                                                                     
-             console.log('Game data:', gameData);                                                                                                                                                                                                                                             
-             if (                                                                                                                                                                                                                                                                             
-               gameData.referee1 === fullName ||                                                                                                                                                                                                                                              
-               gameData.referee2 === fullName ||                                                                                                                                                                                                                                              
-               gameData.linesperson1 === fullName ||                                                                                                                                                                                                                                          
-               gameData.linesperson2 === fullName                                                                                                                                                                                                                                             
-             ) {                                                                                                                                                                                                                                                                              
-               const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());                                                                                                                                                                                                           
-               const formattedDate = format(gameDate, 'yyyy-MM-dd');                                                                                                                                                                                                                          
-               newMarkedDates[formattedDate] = {                                                                                                                                                                                                                                              
-                 customStyles: { container: { backgroundColor: '#ff6600' } }                                                                                                                                                                                                                  
-               };                                                                                                                                                                                                                                                                             
-             }                                                                                                                                                                                                                                                                                
-           }); 
+          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
+          const queries = [
+            query(scheduleRef, where('referee1', '==', fullName)),
+            query(scheduleRef, where('referee2', '==', fullName)),
+            query(scheduleRef, where('linesperson1', '==', fullName)),
+            query(scheduleRef, where('linesperson2', '==', fullName))
+          ];
+
+          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
+          const allDocs = scheduleSnapshots.flatMap(snapshot => snapshot.docs);
           
-          console.log('Marked dates:', newMarkedDates); // Log the final marked dates
+          const newMarkedDates = {};
+          const teamsRef = collection(FIRESTORE_DB, 'teams');
+
+          for (const doc of allDocs) {
+            const gameData = doc.data();
+            const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());
+            const formattedDate = format(gameDate, 'yyyy-MM-dd');
+            const gameTime = gameData.gameTime;
+
+            // Fetch home team abbreviation
+            const homeTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.homeTeam)));
+            const homeTeamAbbr = homeTeamDoc.docs[0]?.data().abbreviation || '';
+
+            // Fetch away team abbreviation
+            const awayTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.awayTeam)));
+            const awayTeamAbbr = awayTeamDoc.docs[0]?.data().abbreviation || '';
+
+            console.log(`Debug - Date: ${formattedDate}`);
+            console.log(`Debug - Home Team City: ${gameData.homeTeam}, Abbreviation: ${homeTeamAbbr}`);
+            console.log(`Debug - Away Team City: ${gameData.awayTeam}, Abbreviation: ${awayTeamAbbr}`);
+
+            newMarkedDates[formattedDate] = {
+              selected: true,
+              text: `${awayTeamAbbr}\n@\n${homeTeamAbbr}`,
+              gameTime: gameTime,
+            };
+          }
+          
           setMarkedDates(newMarkedDates);
         }
       }
@@ -83,6 +103,32 @@ export default function CalendarScreen() {
           markingType={'custom'}
           markedDates={markedDates}
           theme={calendarTheme as any}
+          dayComponent={({date, state, marking}: {date?: DateData; state?: string; marking?: CustomMarking}) => {
+            const isDisabled = state === 'disabled';
+            const isToday = state === 'today';
+            return (
+              <View style={[
+                styles.dayContainer,
+                marking?.selected && styles.selectedDayContainer,
+                isToday && styles.todayContainer
+              ]}>
+                <Text style={[
+                  styles.dayText,
+                  isDisabled && styles.disabledDayText
+                ]}>
+                  {date?.day}
+                </Text>
+                {marking?.text && (
+                  <>
+                    <Text style={styles.gameInfo}>{marking.text}</Text>
+                    {marking.gameTime && (
+                      <Text style={styles.gameTime}>{marking.gameTime}</Text>
+                    )}
+                  </>
+                )}
+              </View>
+            );
+          }}
         />
       </View>
     </SafeAreaView>
@@ -90,18 +136,56 @@ export default function CalendarScreen() {
 }
 
 const styles = StyleSheet.create({
-    safeArea: {
-      flex: 1,
-      backgroundColor: '#000000',
-    },
-    container: {
-      flex: 1,
-      justifyContent: 'center',
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  container: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   calendar: {
     width: screenWidth,
     borderWidth: 0,
+  },
+  dayContainer: {
+    width: calendarWidth / 7,
+    height: (calendarWidth * 1.4) / 6,
+    justifyContent: 'flex-start',
+    borderWidth: 0.5,
+    borderColor: '#333333',
+    padding: 2,
+  },
+  selectedDayContainer: {
+    backgroundColor: '#ff6600',
+    borderRadius: 5,
+  },
+  dayText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  gameInfo: {
+    fontSize: 12,
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 13,
+    marginBottom: 3,
+  },
+  gameTime: {
+    fontSize: 10,
+    color: '#ffffff',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  disabledDayText: {
+    color: '#444444',
+  },
+  todayContainer: {
+    borderColor: '#ffffff',
+    borderWidth: 2,
   },
 });
 
@@ -144,26 +228,29 @@ const calendarTheme = {
   'stylesheet.day.basic': {
     base: {
       width: calendarWidth / 7,
-      height: (calendarWidth * 1.4) / 6, // Adjusted for taller days
-      alignItems: 'flex-start',
-      justifyContent: 'flex-start',
+      height: (calendarWidth * 1.4) / 6,
+      alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 0.5,
       borderColor: '#333333',
-      paddingTop: 5,
-      paddingLeft: 5,
     },
     text: {
       fontSize: 16,
       fontWeight: '300',
       color: '#ffffff',
       backgroundColor: 'transparent',
+      textAlign: 'center',
     },
     today: {
       borderColor: '#ffffff',
-      borderWidth: 2,
+      borderWidth: 1,
     },
     todayText: {
       fontWeight: 'bold',
+      color: '#ffffff',
+    },
+    disabledText: {
+      color: '#444444',
     },
   },
 };

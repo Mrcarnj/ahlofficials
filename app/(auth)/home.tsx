@@ -1,21 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { mockEvents } from './calendar';
-
-const getTodayEvent = () => {
-  const today = new Date().toISOString().split('T')[0];
-  return mockEvents[today as keyof typeof mockEvents] || null;
-};
-
-const getUpcomingEvents = () => {
-  const today = new Date();
-  const upcomingEvents = Object.entries(mockEvents)
-    .filter(([date]) => new Date(date) > today)
-    .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
-    .slice(0, 3);
-  return upcomingEvents;
-};
+import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { format, parse, isToday, isFuture, compareAsc } from 'date-fns';
 
 const externalLinks = [
   { title: 'Rulebook', url: 'https://theahl.com/rules' },
@@ -23,8 +11,59 @@ const externalLinks = [
 ];
 
 export default function HomeScreen() {
-  const todayEvent = getTodayEvent();
-  const upcomingEvents = getUpcomingEvents();
+  const [user, setUser] = useState(FIREBASE_AUTH.currentUser);
+  const [todayEvent, setTodayEvent] = useState(null);
+  const [upcomingEvents, setUpcomingEvents] = useState([]);
+
+  useEffect(() => {
+    const fetchUserGames = async () => {
+      if (user) {
+        const userDocRef = collection(FIRESTORE_DB, 'roster');
+        const userQuery = query(userDocRef, where('uid', '==', user.uid));
+        const userSnapshot = await getDocs(userQuery);
+        
+        if (!userSnapshot.empty) {
+          const userData = userSnapshot.docs[0].data();
+          const fullName = `${userData.firstName} ${userData.lastName}`;
+          
+          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
+          const queries = [
+            query(scheduleRef, where('referee1', '==', fullName)),
+            query(scheduleRef, where('referee2', '==', fullName)),
+            query(scheduleRef, where('linesperson1', '==', fullName)),
+            query(scheduleRef, where('linesperson2', '==', fullName))
+          ];
+
+          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
+          const allDocs = scheduleSnapshots.flatMap(snapshot => snapshot.docs);
+          
+          const events = await Promise.all(allDocs.map(async (doc) => {
+            const gameData = doc.data();
+            const gameDate = parse(gameData.gameDate, 'MM/dd/yyyy', new Date());
+            const formattedDate = format(gameDate, 'MM-dd-yyyy');
+
+            return {
+              date: formattedDate,
+              description: `${gameData.awayTeam} @ ${gameData.homeTeam}`,
+              gameTime: gameData.gameTime,
+            };
+          }));
+
+          const today = new Date();
+          const todayEvent = events.find(event => isToday(parse(event.date, 'MM-dd-yyyy', new Date())));
+          const futureEvents = events
+            .filter(event => isFuture(parse(event.date, 'MM-dd-yyyy', new Date())))
+            .sort((a, b) => compareAsc(parse(a.date, 'MM-dd-yyyy', new Date()), parse(b.date, 'MM-dd-yyyy', new Date())))
+            .slice(0, 3);
+
+          setTodayEvent(todayEvent || null);
+          setUpcomingEvents(futureEvents);
+        }
+      }
+    };
+
+    fetchUserGames();
+  }, [user]);
 
   const openLink = async (url: string) => {
     const supported = await Linking.canOpenURL(url);
@@ -38,30 +77,32 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Today</Text>
-      {todayEvent ? (
-        <View style={styles.eventItem}>
-          <Text style={styles.eventDate}>{new Date().toISOString().split('T')[0]}</Text>
-          <Text style={styles.eventDescription}>{todayEvent.description}</Text>
-        </View>
-      ) : (
-        <Text style={styles.noEventText}>No Game Today</Text>
-      )}
-      <View style={styles.separator} />
-      <Text style={styles.title}>Upcoming Games</Text>
-      {upcomingEvents.map(([date, event]) => (
-        <View key={date} style={styles.eventItem}>
-          <Text style={styles.eventDate}>{date}</Text>
-          <Text style={styles.eventDescription}>{event.description}</Text>
-        </View>
-      ))}
-      <View style={styles.separator} />
-      <Text style={styles.title}>External Links</Text>
-      {externalLinks.map((link, index) => (
-        <TouchableOpacity key={index} onPress={() => openLink(link.url)} style={styles.linkButton}>
-          <Text style={styles.link}>{link.title}</Text>
-        </TouchableOpacity>
-      ))}
+        <Text style={styles.title}>Today</Text>
+        {todayEvent ? (
+          <View style={styles.eventItem}>
+            <Text style={styles.eventDate}>{todayEvent.date}</Text>
+            <Text style={styles.eventDescription}>{todayEvent.description}</Text>
+            <Text style={styles.eventTime}>{todayEvent.gameTime}</Text>
+          </View>
+        ) : (
+          <Text style={styles.noEventText}>No Game Today</Text>
+        )}
+        <View style={styles.separator} />
+        <Text style={styles.title}>Upcoming Games</Text>
+        {upcomingEvents.map((event, index) => (
+          <View key={index} style={styles.eventItem}>
+            <Text style={styles.eventDate}>{event.date}</Text>
+            <Text style={styles.eventDescription}>{event.description}</Text>
+            <Text style={styles.eventTime}>{event.gameTime}</Text>
+          </View>
+        ))}
+        <View style={styles.separator} />
+        <Text style={styles.title}>External Links</Text>
+        {externalLinks.map((link, index) => (
+          <TouchableOpacity key={index} onPress={() => openLink(link.url)} style={styles.linkButton}>
+            <Text style={styles.link}>{link.title}</Text>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
@@ -102,6 +143,11 @@ const styles = StyleSheet.create({
   eventDescription: {
     fontSize: 16,
     color: '#fff',
+    marginBottom: 5,
+  },
+  eventTime: {
+    fontSize: 14,
+    color: '#888',
   },
   separator: {
     marginVertical: 25,

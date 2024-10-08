@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TextInput, ScrollView, TouchableOpacity,
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig'; // Adjust the import path as needed
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { Ionicons } from "@expo/vector-icons";
 
 export default function ProfileScreen() {
@@ -14,6 +14,7 @@ export default function ProfileScreen() {
   const [phone, setPhone] = useState('');
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
+  const [gameCount, setGameCount] = useState(0);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -26,6 +27,20 @@ export default function ProfileScreen() {
           setLastName(userData.lastName || '');
           setEmail(userData.email || '');
           setPhone(userData.phoneNumber || '');
+
+          // Fetch game count
+          const fullName = `${userData.firstName} ${userData.lastName}`;
+          const scheduleRef = collection(FIRESTORE_DB, 'schedule');
+          const queries = [
+            query(scheduleRef, where('referee1', '==', fullName)),
+            query(scheduleRef, where('referee2', '==', fullName)),
+            query(scheduleRef, where('linesperson1', '==', fullName)),
+            query(scheduleRef, where('linesperson2', '==', fullName))
+          ];
+
+          const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
+          const totalCount = scheduleSnapshots.reduce((acc, snapshot) => acc + snapshot.size, 0);
+          setGameCount(totalCount);
         }
       }
     };
@@ -82,6 +97,7 @@ export default function ProfileScreen() {
           style={styles.profileImage}
         />
         <Text style={styles.name}>{`${firstName} ${lastName}`}</Text>
+        <Text style={styles.gameCount}>Game Count: {gameCount}</Text>
         <View style={styles.infoSection}>
           {renderEditableField(email, setEmail, isEditingEmail, setIsEditingEmail, "Email", "email-address")}
           {renderEditableField(phone, setPhone, isEditingPhone, setIsEditingPhone, "Phone", "phone-pad")}
@@ -122,6 +138,12 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  gameCount: {
+    fontSize: 18,
+    color: '#ff6600',
     textAlign: 'center',
     marginBottom: 20,
   },
