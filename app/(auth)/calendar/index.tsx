@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
 import { format, parse } from 'date-fns';
 import { useAppContext } from '../../../context/AppContext';
+import { useRouter } from 'expo-router';
 
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
@@ -23,6 +24,7 @@ type CustomMarking = {
 export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const { games, loading } = useAppContext();
+  const router = useRouter();
 
   const markedDates = games.reduce((acc, game) => {
     const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
@@ -30,9 +32,18 @@ export default function CalendarScreen() {
       selected: true,
       text: `${game.awayTeamAbbr}\n@\n${game.homeTeamAbbr}`,
       gameTime: game.gameTime,
+      documentId: game.id, // Assuming each game object has an 'id' field
     };
     return acc;
   }, {});
+
+  const onDayPress = (day: DateData) => {
+    const selectedDate = day.dateString;
+    const selectedGame = markedDates[selectedDate];
+    if (selectedGame && selectedGame.documentId) {
+      router.push(`/calendar/${selectedGame.documentId}`);
+    }
+  };
 
   const onMonthChange = (month: DateData) => {
     setCurrentMonth(new Date(month.timestamp));
@@ -63,15 +74,19 @@ export default function CalendarScreen() {
           markingType={'custom'}
           markedDates={markedDates}
           theme={calendarTheme as any}
+          onDayPress={onDayPress}
           dayComponent={({date, state, marking}: {date?: DateData; state?: string; marking?: CustomMarking}) => {
             const isDisabled = state === 'disabled';
             const isToday = state === 'today';
             return (
-              <View style={[
-                styles.dayContainer,
-                marking?.selected && styles.selectedDayContainer,
-                isToday && styles.todayContainer
-              ]}>
+              <TouchableOpacity
+                onPress={() => date && onDayPress(date)}
+                style={[
+                  styles.dayContainer,
+                  marking?.selected && styles.selectedDayContainer,
+                  isToday && styles.todayContainer
+                ]}
+              >
                 <Text style={[
                   styles.dayText,
                   isDisabled && styles.disabledDayText
@@ -86,7 +101,7 @@ export default function CalendarScreen() {
                     )}
                   </>
                 )}
-              </View>
+              </TouchableOpacity>
             );
           }}
         />
