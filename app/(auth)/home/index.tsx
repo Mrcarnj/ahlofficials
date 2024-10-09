@@ -6,8 +6,10 @@ import { format, parse, isToday, isFuture, compareAsc } from 'date-fns';
 import { useRouter } from 'expo-router';
 
 const externalLinks = [
+  { title: 'Incident Report', url: 'https://bit.ly/ahlincidentreport' },
+  { title: 'Video Review Report', url: 'https://bit.ly/ahlvideoreview' },
   { title: 'Rulebook', url: 'https://theahl.com/rules' },
-  { title: 'Expo Docs', url: 'https://docs.expo.dev/' },
+  { title: 'AHL Google Drive', url: 'https://bit.ly/AHLOfficialsGoogleDrive24-25' },
 ];
 
 export default function HomeScreen() {

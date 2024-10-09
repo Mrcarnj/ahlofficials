@@ -7,9 +7,9 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
 
 export default function ProfileScreen() {
-  const { user, userFullName, gameCount, loading, refreshUserData } = useAppContext();
+  const { user, userFullName, userPhoneNumber, gameCount, loading, refreshUserData } = useAppContext();
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(userPhoneNumber || '');
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
 

@@ -6,6 +6,7 @@ import { User } from 'firebase/auth';
 interface AppContextType {
   user: User | null;
   userFullName: string;
+  userPhoneNumber: string;
   games: any[];
   gameCount: number;
   loading: boolean;
@@ -29,6 +30,7 @@ interface AppProviderProps {
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(FIREBASE_AUTH.currentUser);
   const [userFullName, setUserFullName] = useState('');
+  const [userPhoneNumber, setUserPhoneNumber] = useState('');
   const [games, setGames] = useState([]);
   const [gameCount, setGameCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -44,6 +46,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const userData = userSnapshot.docs[0].data();
         const fullName = `${userData.firstName} ${userData.lastName}`;
         setUserFullName(fullName);
+        setUserPhoneNumber(userData.phoneNumber || '');
         
         const scheduleRef = collection(FIRESTORE_DB, 'schedule');
         const queries = [
@@ -111,7 +114,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, userFullName, games, gameCount, loading, refreshUserData }}>
+    <AppContext.Provider value={{ user, userFullName, userPhoneNumber, games, gameCount, loading, refreshUserData }}>
       {children}
     </AppContext.Provider>
   );
