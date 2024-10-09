@@ -68,9 +68,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const homeTeamAbbr = homeTeamData.abbreviation || '';
           const arenaName = homeTeamData.arenaName || '';
           const timeZone = homeTeamData.timeZone || '';
+          const homeHeadCoachPic = homeTeamData.headCoachPic || '';
+          const homeEquiptmentManager = homeTeamData.equipmentManagerName || '';
+          const homeEquiptmentManagerPhone = homeTeamData.equipmentManagerPhone || '';
           
           const awayTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.awayTeam)));
-          const awayTeamAbbr = awayTeamDoc.docs[0]?.data()?.abbreviation || '';
+          const awayTeamData = awayTeamDoc.docs[0]?.data() || {};
+          const awayTeamAbbr = awayTeamData.abbreviation || '';
+          const awayHeadCoachPic = awayTeamData.headCoachPic || '';
+          const awayEquiptmentManager = awayTeamData.equipmentManagerName || '';
+          const awayEquiptmentManagerPhone = awayTeamData.equipmentManagerPhone || '';
 
           return {
             ...gameData,
@@ -78,6 +85,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             awayTeamAbbr,
             arenaName,
             timeZone,
+            homeHeadCoachPic,
+            awayHeadCoachPic,
+            homeEquiptmentManager,
+            homeEquiptmentManagerPhone,
+            awayEquiptmentManager,
+            awayEquiptmentManagerPhone
           };
         }));
 

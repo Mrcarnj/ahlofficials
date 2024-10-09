@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAppContext } from '../../../context/AppContext';
 import { format, parse, isToday, isFuture, compareAsc, addDays, differenceInDays } from 'date-fns';
 import { useRouter } from 'expo-router';
@@ -99,23 +100,28 @@ export default function HomeScreen() {
           <Text style={styles.noEventText}>No Game Today</Text>
         )}
         <View style={styles.separator} />
-        <Text style={styles.reportTitle}>Expense Report Due:</Text>
-        {(() => {
-          const { text, isToday } = getNextExpenseReportDue();
-          return (
-            <Text style={[styles.expenseReportText, isToday && styles.expenseReportToday]}>
-              {text}
-            </Text>
-          );
-        })()}
+        <View style={styles.expenseReportContainer}>
+          <Text style={styles.reportTitle}>Expense Report Due: </Text>
+          {(() => {
+            const { text, isToday } = getNextExpenseReportDue();
+            return (
+              <Text style={[styles.expenseReportText, isToday && styles.expenseReportToday]}>
+                {text}
+              </Text>
+            );
+          })()}
+        </View>
         <View style={styles.separator} />
         <Text style={styles.title}>Upcoming Games</Text>
         {upcomingEvents.map((event, index) => (
           <TouchableOpacity key={index} onPress={() => navigateToGameDetails(event.id)} style={styles.eventItem}>
-            <Text style={styles.eventDate}>{format(parse(event.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
-            <Text style={styles.eventDescription}>{`${event.awayTeam} @ ${event.homeTeam}`}</Text>
-            <Text style={styles.eventArena}>{event.arenaName || 'Arena not specified'}</Text>
-            <Text style={styles.eventTime}>{`${event.gameTime} ${event.timeZone || ''}`}</Text>
+            <View style={styles.eventContent}>
+              <Text style={styles.eventDate}>{format(parse(event.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
+              <Text style={styles.eventDescription}>{`${event.awayTeam} @ ${event.homeTeam}`}</Text>
+              <Text style={styles.eventArena}>{event.arenaName || 'Arena not specified'}</Text>
+              <Text style={styles.eventTime}>{`${event.gameTime} ${event.timeZone || ''}`}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ff6600" style={styles.arrowIcon} />
           </TouchableOpacity>
         ))}
         <View style={styles.separator} />
@@ -153,15 +159,23 @@ const styles = StyleSheet.create({
   reportTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    fontStyle: 'italic',
-    marginBottom: 15,
     color: '#fff',
+  },
+  expenseReportContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   eventItem: {
     backgroundColor: '#1a1a1a',
     borderRadius: 10,
     padding: 15,
     marginBottom: 15,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  eventContent: {
+    flex: 1,
   },
   eventDate: {
     fontSize: 18,
@@ -183,6 +197,9 @@ const styles = StyleSheet.create({
     color: '#888',
     fontStyle: 'italic',
     marginBottom: 5,
+  },
+  arrowIcon: {
+    marginLeft: 10,
   },
   separator: {
     marginVertical: 25,
@@ -218,6 +235,7 @@ const styles = StyleSheet.create({
     color: '#ff6600',
     fontWeight: 'bold',
     textAlign: 'center',
+    marginLeft: 5,
   },
   expenseReportToday: {
     fontWeight: 'bold',

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
@@ -9,6 +9,28 @@ const GamePage = () => {
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [teamLogos, setTeamLogos] = useState({});
+  const [headCoaches, setHeadCoaches] = useState({});
+
+  const handlePhonePress = (phoneNumber) => {
+    Alert.alert(
+      "Contact Equipment Manager",
+      "Choose an action",
+      [
+        {
+          text: "Call",
+          onPress: () => Linking.openURL(`tel:${phoneNumber}`)
+        },
+        {
+          text: "Message",
+          onPress: () => Linking.openURL(`sms:${phoneNumber}?body=`)
+        },
+        {
+          text: "Cancel",
+          style: "cancel"
+        }
+      ]
+    );
+  };
 
   useEffect(() => {
     const fetchGameAndTeams = async () => {
@@ -19,25 +41,49 @@ const GamePage = () => {
         if (docSnap.exists()) {
           const gameData = docSnap.data();
 
-          // Fetch team logos and arena name
+          // Fetch team logos, arena name, and equipment manager info
           const teamsRef = collection(FIRESTORE_DB, 'teams');
           const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
           const teamsSnapshot = await getDocs(teamsQuery);
 
           const logos = {};
+          const coaches = {};
           let arenaName = '';
           let timeZone = '';
+          let homeEquiptmentManager = '';
+          let homeEquiptmentManagerPhone = '';
+          let awayEquiptmentManager = '';
+          let awayEquiptmentManagerPhone = '';
+
           teamsSnapshot.forEach((doc) => {
             const teamData = doc.data();
             logos[teamData.city] = teamData.logo;
+            coaches[teamData.city] = {
+              name: teamData.headCoachName,
+              picture: teamData.headCoachPic
+            };
             if (teamData.city === gameData.homeTeam) {
               arenaName = teamData.arenaName;
               timeZone = teamData.timeZone;
+              homeEquiptmentManager = teamData.equipmentManagerName || '';
+              homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
+            } else if (teamData.city === gameData.awayTeam) {
+              awayEquiptmentManager = teamData.equipmentManagerName || '';
+              awayEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
             }
           });
 
-          setGame({ ...gameData, arenaName, timeZone });
+          setGame({ 
+            ...gameData, 
+            arenaName, 
+            timeZone, 
+            homeEquiptmentManager,
+            homeEquiptmentManagerPhone,
+            awayEquiptmentManager,
+            awayEquiptmentManagerPhone
+          });
           setTeamLogos(logos);
+          setHeadCoaches(coaches);
         } else {
           console.log('No such document!');
         }
@@ -80,6 +126,7 @@ const GamePage = () => {
         <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
         <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
       </View>
+      <Text style={styles.titles}>Officials Crew</Text>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
@@ -112,6 +159,40 @@ const GamePage = () => {
           <Text style={styles.refereeText}>{game.linesperson2}</Text>
         </View>
       </View>
+      <View style={styles.separator} />
+      <Text style={styles.titles}>Head Coaches</Text>
+      <View style={styles.headCoachesRow}>
+        <View style={styles.headCoachContainer}>
+          <Image
+            source={{ uri: game.awayHeadCoachPic || headCoaches[game.awayTeam]?.picture || 'https://via.placeholder.com/150' }}
+            style={styles.headCoachPic}
+          />
+          <Text style={styles.headCoachText}>{headCoaches[game.awayTeam]?.name || 'N/A'}</Text>
+        </View>
+        <View style={styles.headCoachContainer}>
+          <Image
+            source={{ uri: game.homeHeadCoachPic || headCoaches[game.homeTeam]?.picture || 'https://via.placeholder.com/150' }}
+            style={styles.headCoachPic}
+          />
+          <Text style={styles.headCoachText}>{headCoaches[game.homeTeam]?.name || 'N/A'}</Text>
+        </View>
+      </View>
+      <Text style={styles.titles}>Equipment Managers</Text>
+      <View style={styles.equipmentManagersRow}>
+        <View style={styles.equipmentManagerContainer}>
+          <Text style={styles.equipmentManagerName}>{game.awayEquiptmentManager || 'N/A'}</Text>
+          <TouchableOpacity onPress={() => handlePhonePress(game.awayEquiptmentManagerPhone)}>
+            <Text style={styles.equipmentManagerPhone}>{game.awayEquiptmentManagerPhone || 'N/A'}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.equipmentManagerContainer}>
+          <Text style={styles.equipmentManagerName}>{game.homeEquiptmentManager || 'N/A'}</Text>
+          <TouchableOpacity onPress={() => handlePhonePress(game.homeEquiptmentManagerPhone)}>
+            <Text style={styles.equipmentManagerPhone}>{game.homeEquiptmentManagerPhone || 'N/A'}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={styles.separator} />
     </ScrollView>
   );
 };
@@ -135,6 +216,12 @@ const styles = StyleSheet.create({
      shadowOpacity: 0.7,                                                                                                                                                                                                                                                                     
      shadowRadius: 3.84,                                                                                                                                                                                                                                                                      
      elevation: 5,
+  },
+  separator: {
+    marginVertical: 5,
+    height: 1,
+    width: '100%',
+    backgroundColor: '#333',
   },
   teamsContainer: {
     flexDirection: 'row',
@@ -184,6 +271,48 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     marginBottom: 20,
   },
+  headCoachesRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  headCoachContainer: {
+    alignItems: 'center',
+  },
+  headCoachPic: {
+    width: 100,
+    height: 150,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#ffffff',
+    marginBottom: 10,
+    marginTop: 10,
+  },
+  headCoachText: {
+    fontSize: 16,
+    color: '#ffffff',
+    textAlign: 'center',
+  },
+  equipmentManagersRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  equipmentManagerContainer: {
+    alignItems: 'center',
+  },
+  equipmentManagerName: {
+    fontSize: 16,
+    color: '#ffffff',
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  equipmentManagerPhone: {
+    fontSize: 14,
+    color: '#4287f5',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+  },
   refereeContainer: {
     alignItems: 'center',
   },
@@ -212,6 +341,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#ffffff',
     textAlign: 'center',
+  },
+  titles: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 5,
   },
 });
 
