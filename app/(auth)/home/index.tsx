@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppContext } from '../../../context/AppContext';
-import { format, parse, isToday, isFuture, compareAsc } from 'date-fns';
+import { format, parse, isToday, isFuture, compareAsc, addDays, differenceInDays } from 'date-fns';
 import { useRouter } from 'expo-router';
 
 const externalLinks = [
@@ -15,6 +15,27 @@ const externalLinks = [
 export default function HomeScreen() {
   const { games, loading } = useAppContext();
   const router = useRouter();
+
+  const getNextExpenseReportDue = () => {
+    const startDate = new Date(2023, 9, 7); // October 7, 2023
+    const endDate = new Date(2025, 5, 30); // June 30, 2025
+    const today = new Date();
+    let nextDueDate = startDate;
+
+    while (nextDueDate <= endDate) {
+      if (nextDueDate >= today) {
+        const daysUntilDue = differenceInDays(nextDueDate, today);
+        if (daysUntilDue === 0) {
+          return { text: "TODAY by 12pm EST", isToday: true };
+        } else {
+          return { text: `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`, isToday: false };
+        }
+      }
+      nextDueDate = addDays(nextDueDate, 14); // Add two weeks
+    }
+
+    return { text: "No more expense reports due", isToday: false };
+  };
 
   const todayEvent = games.find(game => isToday(parse(game.gameDate, 'MM/dd/yyyy', new Date())));
   const upcomingEvents = games
@@ -59,6 +80,16 @@ export default function HomeScreen() {
         ) : (
           <Text style={styles.noEventText}>No Game Today</Text>
         )}
+        <View style={styles.separator} />
+        <Text style={styles.title}>Expense Report Due:</Text>
+        {(() => {
+          const { text, isToday } = getNextExpenseReportDue();
+          return (
+            <Text style={[styles.expenseReportText, isToday && styles.expenseReportToday]}>
+              {text}
+            </Text>
+          );
+        })()}
         <View style={styles.separator} />
         <Text style={styles.title}>Upcoming Games</Text>
         {upcomingEvents.map((event, index) => (
@@ -156,5 +187,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#fff',
     textAlign: 'center',
+  },
+  expenseReportText: {
+    fontSize: 18,
+    color: '#ff6600',
+    textAlign: 'center',
+    marginBottom: 15,
+  },
+  expenseReportToday: {
+    fontWeight: 'bold',
+    color: '#ff0000',
   },
 });
