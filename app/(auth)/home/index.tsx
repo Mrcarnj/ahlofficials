@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppContext } from '../../../context/AppContext';
 import { format, parse, isToday, isFuture, compareAsc, addDays, differenceInDays } from 'date-fns';
@@ -13,8 +13,15 @@ const externalLinks = [
 ];
 
 export default function HomeScreen() {
-  const { games, loading } = useAppContext();
+  const { games, loading, refreshUserData } = useAppContext();
   const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refreshUserData();
+    setRefreshing(false);
+  }, [refreshUserData]);
 
   const getNextExpenseReportDue = () => {
     const startDate = new Date(2023, 9, 7); // October 7, 2023
@@ -28,7 +35,7 @@ export default function HomeScreen() {
         if (daysUntilDue === 0) {
           return { text: "TODAY by 12pm EST", isToday: true };
         } else {
-          return { text: `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`, isToday: false };
+          return { text: `${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`, isToday: false };
         }
       }
       nextDueDate = addDays(nextDueDate, 14); // Add two weeks
@@ -68,7 +75,18 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
+      <ScrollView 
+        style={styles.scrollView} 
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#ff6600']} // customize the loading spinner color
+            tintColor="#ff6600" // for iOS
+          />
+        }
+      >
         <Text style={styles.title}>Today</Text>
         {todayEvent ? (
           <TouchableOpacity onPress={() => navigateToGameDetails(todayEvent.id)} style={styles.eventItem}>
@@ -81,7 +99,7 @@ export default function HomeScreen() {
           <Text style={styles.noEventText}>No Game Today</Text>
         )}
         <View style={styles.separator} />
-        <Text style={styles.title}>Expense Report Due:</Text>
+        <Text style={styles.reportTitle}>Expense Report Due:</Text>
         {(() => {
           const { text, isToday } = getNextExpenseReportDue();
           return (
@@ -129,6 +147,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
+    marginBottom: 15,
+    color: '#fff',
+  },
+  reportTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontStyle: 'italic',
     marginBottom: 15,
     color: '#fff',
   },
@@ -191,8 +216,8 @@ const styles = StyleSheet.create({
   expenseReportText: {
     fontSize: 18,
     color: '#ff6600',
+    fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 15,
   },
   expenseReportToday: {
     fontWeight: 'bold',
