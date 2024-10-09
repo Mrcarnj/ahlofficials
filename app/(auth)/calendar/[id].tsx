@@ -8,28 +8,28 @@ const GamePage = () => {
   const { id } = useLocalSearchParams();
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [teamAbbreviations, setTeamAbbreviations] = useState({});
+  const [teamLogos, setTeamLogos] = useState({});
 
   useEffect(() => {
     const fetchGameAndTeams = async () => {
       try {
         const docRef = doc(FIRESTORE_DB, 'schedule', Array.isArray(id) ? id[0] : id);
         const docSnap = await getDoc(docRef);
-        
+
         if (docSnap.exists()) {
           const gameData = docSnap.data();
-          
-          // Fetch team abbreviations and arena name
+
+          // Fetch team logos and arena name
           const teamsRef = collection(FIRESTORE_DB, 'teams');
           const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
           const teamsSnapshot = await getDocs(teamsQuery);
-          
-          const abbreviations = {};
+
+          const logos = {};
           let arenaName = '';
           let timeZone = '';
           teamsSnapshot.forEach((doc) => {
             const teamData = doc.data();
-            abbreviations[teamData.city] = teamData.abbreviation;
+            logos[teamData.city] = teamData.logo;
             if (teamData.city === gameData.homeTeam) {
               arenaName = teamData.arenaName;
               timeZone = teamData.timeZone;
@@ -37,7 +37,7 @@ const GamePage = () => {
           });
 
           setGame({ ...gameData, arenaName, timeZone });
-          setTeamAbbreviations(abbreviations);
+          setTeamLogos(logos);
         } else {
           console.log('No such document!');
         }
@@ -70,13 +70,15 @@ const GamePage = () => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.card}>
-      <Text style={styles.gameDate}>{game.gameDate}</Text>
-      <Text style={styles.gameID}>Game# {game.gameID}</Text>
-        <Text style={styles.teams}>
-          {teamAbbreviations[game.awayTeam] || game.awayTeam} @ {teamAbbreviations[game.homeTeam] || game.homeTeam}
-        </Text>
-        <Text style={styles.gameTime}>{game.gameTime} {game.timeZone}</Text>
-        <Text style={styles.arena}>{game.arenaName}</Text>
+        <Text style={styles.gameDate}>{game.gameDate}</Text>
+        <Text style={styles.gameID}>Game# {game.gameID}</Text>
+        <View style={styles.teamsContainer}>
+          <Image source={{ uri: teamLogos[game.awayTeam] }} style={styles.teamLogo} />
+          <Text style={styles.atSymbol}>@</Text>
+          <Image source={{ uri: teamLogos[game.homeTeam] }} style={styles.teamLogo} />
+        </View>
+        <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
+        <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
       </View>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
@@ -125,17 +127,37 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 20,
     marginBottom: 20,
+    shadowColor: "#ffffff",                                                                                                                                                                                                                                                                     
+     shadowOffset: {                                                                                                                                                                                                                                                                          
+       width: -7,                                                                                                                                                                                                                                                                              
+       height: -7,                                                                                                                                                                                                                                                                             
+     },                                                                                                                                                                                                                                                                                       
+     shadowOpacity: 0.7,                                                                                                                                                                                                                                                                     
+     shadowRadius: 3.84,                                                                                                                                                                                                                                                                      
+     elevation: 5,
   },
-  teams: {
-    fontSize: 40,
+  teamsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  teamLogo: {
+    width: 80,
+    height: 80,
+    resizeMode: 'contain',
+    marginHorizontal: 20,
+  },
+  atSymbol: {
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#000000',
-    marginBottom: 20,
-    textAlign: 'center'
+    marginHorizontal: 10,
   },
   gameTime: {
     fontSize: 18,
     color: '#000000',
+    marginTop: -10,
     marginBottom: 5,
     textAlign: 'center'
   },
@@ -155,7 +177,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#666666',
     textAlign: 'center',
-    marginBottom: 20
+    marginBottom: 10
   },
   refereesRow: {
     flexDirection: 'row',
