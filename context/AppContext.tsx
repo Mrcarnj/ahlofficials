@@ -67,6 +67,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           const homeTeamData = homeTeamDoc.docs[0]?.data() || {};
           const homeTeamAbbr = homeTeamData.abbreviation || '';
           const arenaName = homeTeamData.arenaName || '';
+          const arenaAddress = homeTeamData.arenaAddress || '';
           const timeZone = homeTeamData.timeZone || '';
           const homeHeadCoachPic = homeTeamData.headCoachPic || '';
           const homeEquiptmentManager = homeTeamData.equipmentManagerName || '';
@@ -84,6 +85,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             homeTeamAbbr,
             awayTeamAbbr,
             arenaName,
+            arenaAddress,
             timeZone,
             homeHeadCoachPic,
             awayHeadCoachPic,

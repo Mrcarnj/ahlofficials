@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
@@ -32,6 +32,15 @@ const GamePage = () => {
     );
   };
 
+  const handleArenaPress = (arenaAddress) => {
+    const encodedAddress = encodeURIComponent(arenaAddress);
+    const url = Platform.select({
+      ios: `maps://app?daddr=${encodedAddress}`,
+      android: `google.navigation:q=${encodedAddress}`,
+    });
+    Linking.openURL(url);
+  };
+
   useEffect(() => {
     const fetchGameAndTeams = async () => {
       try {
@@ -49,6 +58,7 @@ const GamePage = () => {
           const logos = {};
           const coaches = {};
           let arenaName = '';
+          let arenaAddress = '';
           let timeZone = '';
           let homeEquiptmentManager = '';
           let homeEquiptmentManagerPhone = '';
@@ -64,6 +74,7 @@ const GamePage = () => {
             };
             if (teamData.city === gameData.homeTeam) {
               arenaName = teamData.arenaName;
+              arenaAddress = teamData.arenaAddress;
               timeZone = teamData.timeZone;
               homeEquiptmentManager = teamData.equipmentManagerName || '';
               homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
@@ -76,6 +87,7 @@ const GamePage = () => {
           setGame({ 
             ...gameData, 
             arenaName, 
+            arenaAddress,
             timeZone, 
             homeEquiptmentManager,
             homeEquiptmentManagerPhone,
@@ -124,7 +136,9 @@ const GamePage = () => {
           <Image source={{ uri: teamLogos[game.homeTeam] }} style={styles.teamLogo} />
         </View>
         <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
-        <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
+        <TouchableOpacity onPress={() => handleArenaPress(game.arenaAddress)}>
+          <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
+        </TouchableOpacity>
       </View>
       <Text style={styles.titles}>Officials Crew</Text>
       <View style={styles.refereesRow}>
@@ -258,13 +272,15 @@ const styles = StyleSheet.create({
   arena: {
     fontSize: 16,
     color: '#666666',
-    textAlign: 'center'
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    fontStyle: 'italic',
   },
   gameID: {
     fontSize: 16,
     color: '#666666',
     textAlign: 'center',
-    marginBottom: 10
+    marginBottom: 10,
   },
   refereesRow: {
     flexDirection: 'row',
