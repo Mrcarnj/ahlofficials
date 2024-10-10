@@ -3,10 +3,15 @@ import { FIREBASE_AUTH, FIRESTORE_DB } from '../config/FirebaseConfig';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 
+interface AppUser extends User {
+  role?: string;
+}
+
 interface AppContextType {
-  user: User | null;
+  user: AppUser | null;
   userFullName: string;
   userPhoneNumber: string;
+  userRole: string;
   games: any[];
   gameCount: number;
   loading: boolean;
@@ -28,14 +33,15 @@ interface AppProviderProps {
 }
 
 export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(FIREBASE_AUTH.currentUser);
+  const [user, setUser] = useState<AppUser | null>(FIREBASE_AUTH.currentUser);
   const [userFullName, setUserFullName] = useState('');
   const [userPhoneNumber, setUserPhoneNumber] = useState('');
+  const [userRole, setUserRole] = useState('');
   const [games, setGames] = useState([]);
   const [gameCount, setGameCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  const fetchUserData = async (user: User) => {
+  const fetchUserData = async (user: AppUser) => {
     setLoading(true);
     try {
       const userDocRef = collection(FIRESTORE_DB, 'roster');
@@ -47,6 +53,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         const fullName = `${userData.firstName} ${userData.lastName}`;
         setUserFullName(fullName);
         setUserPhoneNumber(userData.phoneNumber || '');
+        setUserRole(userData.role || 'user');
+        user.role = userData.role || 'user';
         
         const scheduleRef = collection(FIRESTORE_DB, 'schedule');
         const queries = [
@@ -113,12 +121,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   useEffect(() => {
-    const unsubscribe = FIREBASE_AUTH.onAuthStateChanged(async (user) => {
-      setUser(user);
-      if (user) {
-        await fetchUserData(user);
+    const unsubscribe = FIREBASE_AUTH.onAuthStateChanged(async (firebaseUser) => {
+      if (firebaseUser) {
+        const appUser: AppUser = { ...firebaseUser };
+        setUser(appUser);
+        await fetchUserData(appUser);
       } else {
+        setUser(null);
         setUserFullName('');
+        setUserRole('');
         setGames([]);
         setGameCount(0);
       }
@@ -129,7 +140,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, userFullName, userPhoneNumber, games, gameCount, loading, refreshUserData }}>
+    <AppContext.Provider value={{ user, userFullName, userPhoneNumber, userRole, games, gameCount, loading, refreshUserData }}>
       {children}
     </AppContext.Provider>
   );
