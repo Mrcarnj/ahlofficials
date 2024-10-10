@@ -95,16 +95,16 @@ const index = () => {
                     onChangeText={handleSearch}
                 />
                 <View style={styles.filterContainer}>
+                <FilterButton title="All" isActive={filterOption === 'All'} />
                     <FilterButton title="Upcoming" isActive={filterOption === 'Upcoming'} />
                     <FilterButton title="Previous 7 Days" isActive={filterOption === 'Previous 7 Days'} />
-                    <FilterButton title="All" isActive={filterOption === 'All'} />
                 </View>
                 <ScrollView>
                     {filteredAndSearchedGames.map((game) => (
                         <Link href={`/admin/${game.id}`} key={game.id} asChild>
                             <TouchableOpacity style={styles.gameCard}>
                                 <View style={styles.gameContent}>
-                                    <Text style={styles.gameNumber}>Game: {game.gameID} // {game.gameDate}</Text>
+                                    <Text style={styles.gameNumber}>Game: {game.gameID} ({game.gameDate})</Text>
                                     <Text style={styles.gameText}>{game.awayTeam} @ {game.homeTeam}</Text>
                                     <Text style={styles.gameText}>{game.gameTime}</Text>
                                 </View>

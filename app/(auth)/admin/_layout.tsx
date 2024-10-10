@@ -17,7 +17,7 @@ const stackLayout = () => {
         <Stack.Screen 
           name="[id]" 
           options={{
-            headerTitle: "Game List",
+            headerTitle: "Game Details",
             headerStyle: {
               backgroundColor: '#000000',
             },
