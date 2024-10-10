@@ -5,8 +5,10 @@ import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
 import { collection, collectionGroup, onSnapshot, orderBy, query, where, doc, updateDoc } from 'firebase/firestore';
 import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../../context/AuthContext';
 
 const GameID = () => {
+  const {user} = useAuth();
   const { id } = useGlobalSearchParams();
   const router = useRouter();
   const [allData, setData] = useState([]);
@@ -20,6 +22,22 @@ const GameID = () => {
     linesperson1?: string | null;
     linesperson2?: string | null;
   }>({});
+
+  if (user?.role !== 'admin') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.container}>
+          <Text style={styles.accessDeniedText}>Access Denied</Text>
+          <TouchableOpacity 
+            style={styles.returnButton}
+            onPress={() => router.push('/home')}
+          >
+            <Text style={styles.returnButtonText}>Return to Home</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   useLayoutEffect(() => {
     const gameDataQuery = query(
@@ -435,6 +453,24 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
     marginBottom: 20,
+  },
+  accessDeniedText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ff6600',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  returnButton: {
+    backgroundColor: '#ff6600',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 

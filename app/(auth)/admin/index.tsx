@@ -3,7 +3,7 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../../../context/AuthContext';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
 import { collection, onSnapshot, query } from 'firebase/firestore';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -20,11 +20,28 @@ type FilterOption = 'Upcoming' | 'Previous 7 Days' | 'All';
 
 const index = () => {
     const {user} = useAuth();
+    const router = useRouter();
     const isAdmin = user?.role === 'admin';
     const [loading, setLoading] = useState<boolean>(false);
     const [games, setGames] = useState<Game[]>([]);
     const [filterOption, setFilterOption] = useState<FilterOption>('Upcoming');
     const [searchQuery, setSearchQuery] = useState<string>('');
+
+    if (!isAdmin) {
+        return (
+            <SafeAreaView style={styles.safeArea}>
+                <View style={styles.container}>
+                    <Text style={styles.accessDeniedText}>Access Denied</Text>
+                    <TouchableOpacity 
+                        style={styles.returnButton}
+                        onPress={() => router.push('/home')}
+                    >
+                        <Text style={styles.returnButtonText}>Return to Home</Text>
+                    </TouchableOpacity>
+                </View>
+            </SafeAreaView>
+        );
+    }
     
     useEffect(() => {
         const gamesCollection = collection(FIRESTORE_DB, 'schedule');
@@ -99,7 +116,7 @@ const index = () => {
                     <FilterButton title="Upcoming" isActive={filterOption === 'Upcoming'} />
                     <FilterButton title="Previous 7 Days" isActive={filterOption === 'Previous 7 Days'} />
                 </View>
-                <ScrollView>
+                <ScrollView contentContainerStyle={styles.scrollViewContent}>
                     {filteredAndSearchedGames.map((game) => (
                         <Link href={`/admin/${game.id}`} key={game.id} asChild>
                             <TouchableOpacity style={styles.gameCard}>
@@ -137,8 +154,11 @@ const styles = StyleSheet.create({
     padding: 20,                                                                                                                                                                                                                                                             
   },                                                                                                                                                                                                                                                                                         
   text: {                                                                                                                                                                                                                                                                                    
-    fontSize: 24,                                                                                                                                                                                                                                                                            
+    fontSize: 24,
     fontWeight: 'bold',                                                                                                                                                                                                                                                                      
+  },
+  scrollViewContent: {
+    paddingBottom: 80, // Adjust this value as needed to ensure the last item is fully visible
   },
   gameCard:{
     backgroundColor: '#1a1a1a',
@@ -185,6 +205,24 @@ const styles = StyleSheet.create({
   },
   activeFilterButtonText: {
     color: '#fff',
+  },
+  accessDeniedText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#ff6600',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  returnButton: {
+    backgroundColor: '#ff6600',
+    padding: 15,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
 });
 
