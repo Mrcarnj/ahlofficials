@@ -2,13 +2,15 @@ import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, ActivityIndica
 import React, { useEffect, useLayoutEffect, useState } from 'react'
 import { useGlobalSearchParams, useRouter } from 'expo-router'
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
-import { collection, collectionGroup, onSnapshot, orderBy, query, where, doc, updateDoc } from 'firebase/firestore';
+import { collection, collectionGroup, onSnapshot, orderBy, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
+import { useAppContext } from '../../../context/AppContext';
 
 const GameID = () => {
-  const {user} = useAuth();
+  const { user } = useAuth();
+  const { fetchGameAndTeams } = useAppContext();
   const { id } = useGlobalSearchParams();
   const router = useRouter();
   const [allData, setData] = useState([]);
@@ -21,6 +23,10 @@ const GameID = () => {
     referee2?: string | null;
     linesperson1?: string | null;
     linesperson2?: string | null;
+    referee1Photo?: string | null;
+    referee2Photo?: string | null;
+    linesperson1Photo?: string | null;
+    linesperson2Photo?: string | null;
   }>({});
 
   if (user?.role !== 'admin') {
@@ -40,19 +46,23 @@ const GameID = () => {
   }
 
   useLayoutEffect(() => {
-    const gameDataQuery = query(
-      collectionGroup(FIRESTORE_DB, 'schedule'),
-      where('id', '==', id)
-    );
-    const unsubscribe = onSnapshot(gameDataQuery, (snapshot) => {
-      const allData = snapshot.docs.map((doc) => {
-        return {
-          id: doc.id,
-          ...doc.data()
-        };
-      });
-      setData(allData);
-    });
+    const loadGame = async () => {
+      setLoading(true);
+      try {
+        const gameData = await fetchGameAndTeams(Array.isArray(id) ? id[0] : id);
+        if (gameData) {
+          setData([gameData]);
+        } else {
+          console.log('No such document!');
+        }
+      } catch (error) {
+        console.error('Error fetching game:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadGame();
 
     const rosterQuery = query(
       collection(FIRESTORE_DB, 'roster'),
@@ -67,10 +77,9 @@ const GameID = () => {
     });
 
     return () => {
-      unsubscribe();
       rosterUnsubscribe();
     };
-  }, []);
+  }, [id, fetchGameAndTeams]);
 
   const handleRemoveOfficial = (position: 'referee1' | 'referee2' | 'linesperson1' | 'linesperson2') => {
     const officialName = changes[position] || allData[0][position];
@@ -84,7 +93,11 @@ const GameID = () => {
         },
         {
           text: "Yes, Remove",
-          onPress: () => setChanges(prev => ({...prev, [position]: null}))
+          onPress: () => setChanges(prev => ({
+            ...prev, 
+            [position]: null, 
+            [`${position}Photo`]: null
+          }))
         }
       ]
     );
@@ -95,7 +108,7 @@ const GameID = () => {
     setModalVisible(true);
   };
 
-  const handleSelectOfficial = (official: { id: string; firstName: string; lastName: string }) => {
+  const handleSelectOfficial = async (official: { id: string; firstName: string; lastName: string }) => {
     const newChanges = { ...changes };
     const officialFullName = `${official.firstName} ${official.lastName}`;
     
@@ -114,6 +127,15 @@ const GameID = () => {
 
     // If not already assigned, update the changes
     newChanges[selectedPosition] = officialFullName;
+
+    // Fetch the official's photo URL
+    const officialDocRef = doc(FIRESTORE_DB, 'roster', official.id);
+    const officialDocSnap = await getDoc(officialDocRef);
+    if (officialDocSnap.exists()) {
+      const officialData = officialDocSnap.data();
+      newChanges[`${selectedPosition}Photo`] = officialData.rosterPhoto || null;
+    }
+
     setChanges(newChanges);
     setModalVisible(false);
   };
@@ -166,18 +188,15 @@ const GameID = () => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ff6600"/>
-        </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        <Spinner visible={loading} />
         <ScrollView>
           {allData.map((data) => (
             <View key={data.id}>
@@ -193,7 +212,7 @@ const GameID = () => {
                     <Ionicons name="remove-circle" size={24} color="red" />
                   </TouchableOpacity>
                   <Image
-                    source={{ uri: 'https://via.placeholder.com/150' }}
+                    source={{ uri: changes.referee1Photo || data.referee1Photo || 'https://via.placeholder.com/150' }}
                     style={styles.profileImageRef}
                   />
                   {changes.referee1 === null ? (
@@ -209,7 +228,7 @@ const GameID = () => {
                     <Ionicons name="remove-circle" size={24} color="red" />
                   </TouchableOpacity>
                   <Image
-                    source={{ uri: 'https://via.placeholder.com/150' }}
+                    source={{ uri: changes.referee2Photo || data.referee2Photo || 'https://via.placeholder.com/150' }}
                     style={styles.profileImageRef}
                   />
                   {changes.referee2 === null ? (
@@ -227,7 +246,7 @@ const GameID = () => {
                     <Ionicons name="remove-circle" size={24} color="red" />
                   </TouchableOpacity>
                   <Image
-                    source={{ uri: 'https://via.placeholder.com/150' }}
+                    source={{ uri: changes.linesperson1Photo || data.linesperson1Photo || 'https://via.placeholder.com/150' }}
                     style={styles.profileImageLines}
                   />
                   {changes.linesperson1 === null ? (
@@ -243,7 +262,7 @@ const GameID = () => {
                     <Ionicons name="remove-circle" size={24} color="red" />
                   </TouchableOpacity>
                   <Image
-                    source={{ uri: 'https://via.placeholder.com/150' }}
+                    source={{ uri: changes.linesperson2Photo || data.linesperson2Photo || 'https://via.placeholder.com/150' }}
                     style={styles.profileImageLines}
                   />
                   {changes.linesperson2 === null ? (
@@ -289,6 +308,17 @@ const GameID = () => {
 };
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
   removeButton: {
     position: 'absolute',
     top: 5,

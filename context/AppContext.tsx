@@ -219,7 +219,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           awayEquiptmentManager,
           awayEquiptmentManagerPhone,
           teamLogos: logos,
-          headCoaches: coaches
+          headCoaches: coaches,
+          referee1Photo: gameData.referee1Photo,
+          referee2Photo: gameData.referee2Photo,
+          linesperson1Photo: gameData.linesperson1Photo,
+          linesperson2Photo: gameData.linesperson2Photo
         };
       } else {
         console.log('No such document!');

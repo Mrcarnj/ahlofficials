@@ -83,7 +83,7 @@ const GamePage = () => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ff6600" />
       </View>
     );
@@ -213,6 +213,17 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingBottom: 20, // Add extra padding at the bottom
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000000',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   card: {
     backgroundColor: '#ffffff',
