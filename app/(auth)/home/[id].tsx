@@ -3,6 +3,25 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Touchable
 import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
+
+const generateUrl = (gameID, isGamesheet = false) => {
+  let numericId;
+
+  if (gameID.startsWith('EX-')) {
+    const exNum = parseInt(gameID.split('-')[1]);
+    numericId = 1027636 + exNum;
+  } else {
+    numericId = 1027660 + parseInt(gameID);
+  }
+
+  if (isGamesheet) {
+    return `https://lscluster.hockeytech.com/game_reports/official-game-report.php?lang_id=1&client_code=ahl&game_id=${numericId}`;
+  } else {
+    return `https://theahl.com/stats/game-center/${numericId}`;
+  }
+};
 
 const GamePage = () => {
   const { id } = useLocalSearchParams();
@@ -84,6 +103,68 @@ const GamePage = () => {
             }
           });
 
+          // Fetch roster data
+          const rosterRef = collection(FIRESTORE_DB, 'roster');
+          const rosterSnapshot = await getDocs(rosterRef);
+          const rosterData = rosterSnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...(doc.data() as { firstName: string; lastName: string })
+          }));
+
+          // Match referees with roster data
+          const matchReferee = async (refereeName) => {
+            const [firstName, lastName] = refereeName.split(' ');
+            const matchedRef = rosterData.find(ref => 
+              ref.firstName.toLowerCase() === firstName.toLowerCase() && 
+              ref.lastName.toLowerCase() === lastName.toLowerCase()
+            );
+            if (matchedRef) {
+              const rosterDocRef = doc(FIRESTORE_DB, 'roster', matchedRef.id);
+              const rosterDocSnap = await getDoc(rosterDocRef);
+              if (rosterDocSnap.exists()) {
+                const rosterData = rosterDocSnap.data();
+                return { id: matchedRef.id, rosterPhoto: rosterData.rosterPhoto };
+              }
+            }
+            return null;
+          };
+
+          const referee1Data = await matchReferee(gameData.referee1);
+          if (referee1Data) {
+            console.log(`Referee1 (${gameData.referee1}) matched to documentID: ${referee1Data.id}`);
+            console.log(`Referee1 rosterPhoto: ${referee1Data.rosterPhoto}`);
+            gameData.referee1Photo = referee1Data.rosterPhoto;
+          } else {
+            console.log(`No match found for Referee1 (${gameData.referee1})`);
+          }
+
+          const referee2Data = await matchReferee(gameData.referee2);
+          if (referee2Data) {
+            console.log(`Referee2 (${gameData.referee2}) matched to documentID: ${referee2Data.id}`);
+            console.log(`Referee2 rosterPhoto: ${referee2Data.rosterPhoto}`);
+            gameData.referee2Photo = referee2Data.rosterPhoto;
+          } else {
+            console.log(`No match found for Referee2 (${gameData.referee2})`);
+          }
+
+          const linesperson1Data = await matchReferee(gameData.linesperson1);
+          if (linesperson1Data) {
+            console.log(`Linesperson1 (${gameData.linesperson1}) matched to documentID: ${linesperson1Data.id}`);
+            console.log(`Linesperson1 rosterPhoto: ${linesperson1Data.rosterPhoto}`);
+            gameData.linesperson1Photo = linesperson1Data.rosterPhoto;
+          } else {
+            console.log(`No match found for Linesperson1 (${gameData.linesperson1})`);
+          }
+
+          const linesperson2Data = await matchReferee(gameData.linesperson2);
+          if (linesperson2Data) {
+            console.log(`Linesperson2 (${gameData.linesperson2}) matched to documentID: ${linesperson2Data.id}`);
+            console.log(`Linesperson2 rosterPhoto: ${linesperson2Data.rosterPhoto}`);
+            gameData.linesperson2Photo = linesperson2Data.rosterPhoto;
+          } else {
+            console.log(`No match found for Linesperson2 (${gameData.linesperson2})`);
+          }
+
           setGame({ 
             ...gameData, 
             arenaName, 
@@ -92,7 +173,11 @@ const GamePage = () => {
             homeEquiptmentManager,
             homeEquiptmentManagerPhone,
             awayEquiptmentManager,
-            awayEquiptmentManagerPhone
+            awayEquiptmentManagerPhone,
+            referee1Photo: gameData.referee1Photo,
+            referee2Photo: gameData.referee2Photo,
+            linesperson1Photo: gameData.linesperson1Photo,
+            linesperson2Photo: gameData.linesperson2Photo
           });
           setTeamLogos(logos);
           setHeadCoaches(coaches);
@@ -126,7 +211,7 @@ const GamePage = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.card}>
         <Text style={styles.gameDate}>{game.gameDate}</Text>
         <Text style={styles.gameID}>Game# {game.gameID}</Text>
@@ -140,18 +225,40 @@ const GamePage = () => {
           <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
         </TouchableOpacity>
       </View>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={() => Linking.openURL(generateUrl(game.gameID))}
+        >
+          <View style={styles.iconContainer}>
+            <FontAwesome5 name="hockey-puck" size={24} color="#ffffff" />
+          </View>
+          <Text style={styles.buttonText}>Game Center</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={() => Linking.openURL(generateUrl(game.gameID, true))}
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons name="newspaper-outline" size={24} color="#ffffff" />
+          </View>
+          <Text style={styles.buttonText}>Gamesheet</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.disclaimer}>Note: Gamesheet not available until after completion of the game.</Text>
+      <View style={styles.separator} />
       <Text style={styles.titles}>Officials Crew</Text>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.referee1Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
           <Text style={styles.refereeText}>{game.referee1}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.referee2Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
           <Text style={styles.refereeText}>{game.referee2}</Text>
@@ -160,14 +267,14 @@ const GamePage = () => {
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.linesperson1Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
           <Text style={styles.refereeText}>{game.linesperson1}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.linesperson2Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
           <Text style={styles.refereeText}>{game.linesperson2}</Text>
@@ -215,13 +322,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  contentContainer: {
     padding: 20,
+    paddingBottom: 20, // Add extra padding at the bottom
   },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 10,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 10,
     shadowColor: "#ffffff",                                                                                                                                                                                                                                                                     
      shadowOffset: {                                                                                                                                                                                                                                                                          
        width: -7,                                                                                                                                                                                                                                                                              
@@ -353,6 +463,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
   },
+  refereeId: {
+    fontSize: 12,
+    color: '#cccccc',
+    textAlign: 'center',
+  },
   text: {
     fontSize: 16,
     color: '#ffffff',
@@ -364,6 +479,36 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
     marginBottom: 5,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  circleButton: {
+    alignItems: 'center',
+  },
+  iconContainer: {
+    backgroundColor: '#ff6600',
+    width: 40,
+    height: 40,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  disclaimer: {
+    fontSize: 11,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontStyle: 'italic',
   },
 });
 

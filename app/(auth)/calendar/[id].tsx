@@ -3,6 +3,25 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, Touchable
 import { useLocalSearchParams } from 'expo-router';
 import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+import { FontAwesome5 } from '@expo/vector-icons';
+
+const generateUrl = (gameID, isGamesheet = false) => {
+  let numericId;
+
+  if (gameID.startsWith('EX-')) {
+    const exNum = parseInt(gameID.split('-')[1]);
+    numericId = 1027636 + exNum;
+  } else {
+    numericId = 1027660 + parseInt(gameID);
+  }
+
+  if (isGamesheet) {
+    return `https://lscluster.hockeytech.com/game_reports/official-game-report.php?lang_id=1&client_code=ahl&game_id=${numericId}`;
+  } else {
+    return `https://theahl.com/stats/game-center/${numericId}`;
+  }
+};
 
 const GamePage = () => {
   const { id } = useLocalSearchParams();
@@ -126,7 +145,7 @@ const GamePage = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <View style={styles.card}>
         <Text style={styles.gameDate}>{game.gameDate}</Text>
         <Text style={styles.gameID}>Game# {game.gameID}</Text>
@@ -140,6 +159,28 @@ const GamePage = () => {
           <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
         </TouchableOpacity>
       </View>
+      <View style={styles.buttonContainer}>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={() => Linking.openURL(generateUrl(game.gameID))}
+        >
+          <View style={styles.iconContainer}>
+            <FontAwesome5 name="hockey-puck" size={24} color="#ffffff" />
+          </View>
+          <Text style={styles.buttonText}>Game Center</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.circleButton}
+          onPress={() => Linking.openURL(generateUrl(game.gameID, true))}
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons name="newspaper-outline" size={24} color="#ffffff" />
+          </View>
+          <Text style={styles.buttonText}>Gamesheet</Text>
+        </TouchableOpacity>
+      </View>
+      <Text style={styles.disclaimer}>Note: Gamesheet not available until after completion of the game.</Text>
+      <View style={styles.separator} />
       <Text style={styles.titles}>Officials Crew</Text>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
@@ -215,13 +256,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000000',
+  },
+  contentContainer: {
     padding: 20,
+    paddingBottom: 20, // Add extra padding at the bottom
   },
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 10,
     padding: 20,
-    marginBottom: 20,
+    marginBottom: 10,
     shadowColor: "#ffffff",                                                                                                                                                                                                                                                                     
      shadowOffset: {                                                                                                                                                                                                                                                                          
        width: -7,                                                                                                                                                                                                                                                                              
@@ -364,6 +408,36 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     textAlign: 'center',
     marginBottom: 5,
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  circleButton: {
+    alignItems: 'center',
+  },
+  iconContainer: {
+    backgroundColor: '#ff6600',
+    width: 40,
+    height: 40,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 5,
+  },
+  buttonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  disclaimer: {
+    fontSize: 11,
+    color: '#fff',
+    textAlign: 'center',
+    marginBottom: 10,
+    fontStyle: 'italic',
   },
 });
 
