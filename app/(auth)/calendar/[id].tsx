@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { useAppContext } from '../../../context/AppContext';
 
 const generateUrl = (gameID, isGamesheet = false) => {
   let numericId;
@@ -25,6 +24,7 @@ const generateUrl = (gameID, isGamesheet = false) => {
 
 const GamePage = () => {
   const { id } = useLocalSearchParams();
+  const { fetchGameAndTeams } = useAppContext();
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [teamLogos, setTeamLogos] = useState({});
@@ -61,60 +61,13 @@ const GamePage = () => {
   };
 
   useEffect(() => {
-    const fetchGameAndTeams = async () => {
+    const loadGame = async () => {
       try {
-        const docRef = doc(FIRESTORE_DB, 'schedule', Array.isArray(id) ? id[0] : id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const gameData = docSnap.data();
-
-          // Fetch team logos, arena name, and equipment manager info
-          const teamsRef = collection(FIRESTORE_DB, 'teams');
-          const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
-          const teamsSnapshot = await getDocs(teamsQuery);
-
-          const logos = {};
-          const coaches = {};
-          let arenaName = '';
-          let arenaAddress = '';
-          let timeZone = '';
-          let homeEquiptmentManager = '';
-          let homeEquiptmentManagerPhone = '';
-          let awayEquiptmentManager = '';
-          let awayEquiptmentManagerPhone = '';
-
-          teamsSnapshot.forEach((doc) => {
-            const teamData = doc.data();
-            logos[teamData.city] = teamData.logo;
-            coaches[teamData.city] = {
-              name: teamData.headCoachName,
-              picture: teamData.headCoachPic
-            };
-            if (teamData.city === gameData.homeTeam) {
-              arenaName = teamData.arenaName;
-              arenaAddress = teamData.arenaAddress;
-              timeZone = teamData.timeZone;
-              homeEquiptmentManager = teamData.equipmentManagerName || '';
-              homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
-            } else if (teamData.city === gameData.awayTeam) {
-              awayEquiptmentManager = teamData.equipmentManagerName || '';
-              awayEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
-            }
-          });
-
-          setGame({ 
-            ...gameData, 
-            arenaName, 
-            arenaAddress,
-            timeZone, 
-            homeEquiptmentManager,
-            homeEquiptmentManagerPhone,
-            awayEquiptmentManager,
-            awayEquiptmentManagerPhone
-          });
-          setTeamLogos(logos);
-          setHeadCoaches(coaches);
+        const gameData = await fetchGameAndTeams(Array.isArray(id) ? id[0] : id);
+        if (gameData) {
+          setGame(gameData);
+          setTeamLogos(gameData.teamLogos);
+          setHeadCoaches(gameData.headCoaches);
         } else {
           console.log('No such document!');
         }
@@ -125,8 +78,8 @@ const GamePage = () => {
       }
     };
 
-    fetchGameAndTeams();
-  }, [id]);
+    loadGame();
+  }, [id, fetchGameAndTeams]);
 
   if (loading) {
     return (
@@ -185,14 +138,14 @@ const GamePage = () => {
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.referee1Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
           <Text style={styles.refereeText}>{game.referee1}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.referee2Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
           <Text style={styles.refereeText}>{game.referee2}</Text>
@@ -201,14 +154,14 @@ const GamePage = () => {
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.linesperson1Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
           <Text style={styles.refereeText}>{game.linesperson1}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: 'https://via.placeholder.com/150' }}
+            source={{ uri: game.linesperson2Photo || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
           <Text style={styles.refereeText}>{game.linesperson2}</Text>
@@ -395,6 +348,11 @@ const styles = StyleSheet.create({
   refereeText: {
     fontSize: 16,
     color: '#ffffff',
+    textAlign: 'center',
+  },
+  refereeId: {
+    fontSize: 12,
+    color: '#cccccc',
     textAlign: 'center',
   },
   text: {

@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
+import { useAppContext } from '../../../context/AppContext';
 
 const generateUrl = (gameID, isGamesheet = false) => {
   let numericId;
@@ -25,6 +24,7 @@ const generateUrl = (gameID, isGamesheet = false) => {
 
 const GamePage = () => {
   const { id } = useLocalSearchParams();
+  const { fetchGameAndTeams } = useAppContext();
   const [game, setGame] = useState(null);
   const [loading, setLoading] = useState(true);
   const [teamLogos, setTeamLogos] = useState({});
@@ -61,126 +61,13 @@ const GamePage = () => {
   };
 
   useEffect(() => {
-    const fetchGameAndTeams = async () => {
+    const loadGame = async () => {
       try {
-        const docRef = doc(FIRESTORE_DB, 'schedule', Array.isArray(id) ? id[0] : id);
-        const docSnap = await getDoc(docRef);
-
-        if (docSnap.exists()) {
-          const gameData = docSnap.data();
-
-          // Fetch team logos, arena name, and equipment manager info
-          const teamsRef = collection(FIRESTORE_DB, 'teams');
-          const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
-          const teamsSnapshot = await getDocs(teamsQuery);
-
-          const logos = {};
-          const coaches = {};
-          let arenaName = '';
-          let arenaAddress = '';
-          let timeZone = '';
-          let homeEquiptmentManager = '';
-          let homeEquiptmentManagerPhone = '';
-          let awayEquiptmentManager = '';
-          let awayEquiptmentManagerPhone = '';
-
-          teamsSnapshot.forEach((doc) => {
-            const teamData = doc.data();
-            logos[teamData.city] = teamData.logo;
-            coaches[teamData.city] = {
-              name: teamData.headCoachName,
-              picture: teamData.headCoachPic
-            };
-            if (teamData.city === gameData.homeTeam) {
-              arenaName = teamData.arenaName;
-              arenaAddress = teamData.arenaAddress;
-              timeZone = teamData.timeZone;
-              homeEquiptmentManager = teamData.equipmentManagerName || '';
-              homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
-            } else if (teamData.city === gameData.awayTeam) {
-              awayEquiptmentManager = teamData.equipmentManagerName || '';
-              awayEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
-            }
-          });
-
-          // Fetch roster data
-          const rosterRef = collection(FIRESTORE_DB, 'roster');
-          const rosterSnapshot = await getDocs(rosterRef);
-          const rosterData = rosterSnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...(doc.data() as { firstName: string; lastName: string })
-          }));
-
-          // Match referees with roster data
-          const matchReferee = async (refereeName) => {
-            const [firstName, lastName] = refereeName.split(' ');
-            const matchedRef = rosterData.find(ref => 
-              ref.firstName.toLowerCase() === firstName.toLowerCase() && 
-              ref.lastName.toLowerCase() === lastName.toLowerCase()
-            );
-            if (matchedRef) {
-              const rosterDocRef = doc(FIRESTORE_DB, 'roster', matchedRef.id);
-              const rosterDocSnap = await getDoc(rosterDocRef);
-              if (rosterDocSnap.exists()) {
-                const rosterData = rosterDocSnap.data();
-                return { id: matchedRef.id, rosterPhoto: rosterData.rosterPhoto };
-              }
-            }
-            return null;
-          };
-
-          const referee1Data = await matchReferee(gameData.referee1);
-          if (referee1Data) {
-            console.log(`Referee1 (${gameData.referee1}) matched to documentID: ${referee1Data.id}`);
-            console.log(`Referee1 rosterPhoto: ${referee1Data.rosterPhoto}`);
-            gameData.referee1Photo = referee1Data.rosterPhoto;
-          } else {
-            console.log(`No match found for Referee1 (${gameData.referee1})`);
-          }
-
-          const referee2Data = await matchReferee(gameData.referee2);
-          if (referee2Data) {
-            console.log(`Referee2 (${gameData.referee2}) matched to documentID: ${referee2Data.id}`);
-            console.log(`Referee2 rosterPhoto: ${referee2Data.rosterPhoto}`);
-            gameData.referee2Photo = referee2Data.rosterPhoto;
-          } else {
-            console.log(`No match found for Referee2 (${gameData.referee2})`);
-          }
-
-          const linesperson1Data = await matchReferee(gameData.linesperson1);
-          if (linesperson1Data) {
-            console.log(`Linesperson1 (${gameData.linesperson1}) matched to documentID: ${linesperson1Data.id}`);
-            console.log(`Linesperson1 rosterPhoto: ${linesperson1Data.rosterPhoto}`);
-            gameData.linesperson1Photo = linesperson1Data.rosterPhoto;
-          } else {
-            console.log(`No match found for Linesperson1 (${gameData.linesperson1})`);
-          }
-
-          const linesperson2Data = await matchReferee(gameData.linesperson2);
-          if (linesperson2Data) {
-            console.log(`Linesperson2 (${gameData.linesperson2}) matched to documentID: ${linesperson2Data.id}`);
-            console.log(`Linesperson2 rosterPhoto: ${linesperson2Data.rosterPhoto}`);
-            gameData.linesperson2Photo = linesperson2Data.rosterPhoto;
-          } else {
-            console.log(`No match found for Linesperson2 (${gameData.linesperson2})`);
-          }
-
-          setGame({ 
-            ...gameData, 
-            arenaName, 
-            arenaAddress,
-            timeZone, 
-            homeEquiptmentManager,
-            homeEquiptmentManagerPhone,
-            awayEquiptmentManager,
-            awayEquiptmentManagerPhone,
-            referee1Photo: gameData.referee1Photo,
-            referee2Photo: gameData.referee2Photo,
-            linesperson1Photo: gameData.linesperson1Photo,
-            linesperson2Photo: gameData.linesperson2Photo
-          });
-          setTeamLogos(logos);
-          setHeadCoaches(coaches);
+        const gameData = await fetchGameAndTeams(Array.isArray(id) ? id[0] : id);
+        if (gameData) {
+          setGame(gameData);
+          setTeamLogos(gameData.teamLogos);
+          setHeadCoaches(gameData.headCoaches);
         } else {
           console.log('No such document!');
         }
@@ -191,8 +78,8 @@ const GamePage = () => {
       }
     };
 
-    fetchGameAndTeams();
-  }, [id]);
+    loadGame();
+  }, [id, fetchGameAndTeams]);
 
   if (loading) {
     return (

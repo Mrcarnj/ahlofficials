@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../config/FirebaseConfig';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { User } from 'firebase/auth';
 
 interface AppUser extends User {
@@ -16,6 +16,7 @@ interface AppContextType {
   gameCount: number;
   loading: boolean;
   refreshUserData: () => Promise<void>;
+  fetchGameAndTeams: (gameId: string) => Promise<any>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -120,6 +121,116 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     }
   };
 
+  const fetchGameAndTeams = async (gameId: string) => {
+    try {
+      const docRef = doc(FIRESTORE_DB, 'schedule', gameId);
+      const docSnap = await getDoc(docRef);
+
+      if (docSnap.exists()) {
+        const gameData = docSnap.data();
+
+        // Fetch team logos, arena name, and equipment manager info
+        const teamsRef = collection(FIRESTORE_DB, 'teams');
+        const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
+        const teamsSnapshot = await getDocs(teamsQuery);
+
+        const logos = {};
+        const coaches = {};
+        let arenaName = '';
+        let arenaAddress = '';
+        let timeZone = '';
+        let homeEquiptmentManager = '';
+        let homeEquiptmentManagerPhone = '';
+        let awayEquiptmentManager = '';
+        let awayEquiptmentManagerPhone = '';
+
+        teamsSnapshot.forEach((doc) => {
+          const teamData = doc.data();
+          logos[teamData.city] = teamData.logo;
+          coaches[teamData.city] = {
+            name: teamData.headCoachName,
+            picture: teamData.headCoachPic
+          };
+          if (teamData.city === gameData.homeTeam) {
+            arenaName = teamData.arenaName;
+            arenaAddress = teamData.arenaAddress;
+            timeZone = teamData.timeZone;
+            homeEquiptmentManager = teamData.equipmentManagerName || '';
+            homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
+          } else if (teamData.city === gameData.awayTeam) {
+            awayEquiptmentManager = teamData.equipmentManagerName || '';
+            awayEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
+          }
+        });
+
+        // Fetch roster data
+        const rosterRef = collection(FIRESTORE_DB, 'roster');
+        const rosterSnapshot = await getDocs(rosterRef);
+        const rosterData = rosterSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...(doc.data() as { firstName: string; lastName: string })
+        }));
+
+        // Match referees with roster data
+        const matchReferee = async (refereeName) => {
+          const [firstName, lastName] = refereeName.split(' ');
+          const matchedRef = rosterData.find(ref => 
+            ref.firstName.toLowerCase() === firstName.toLowerCase() && 
+            ref.lastName.toLowerCase() === lastName.toLowerCase()
+          );
+          if (matchedRef) {
+            const rosterDocRef = doc(FIRESTORE_DB, 'roster', matchedRef.id);
+            const rosterDocSnap = await getDoc(rosterDocRef);
+            if (rosterDocSnap.exists()) {
+              const rosterData = rosterDocSnap.data();
+              return { id: matchedRef.id, rosterPhoto: rosterData.rosterPhoto };
+            }
+          }
+          return null;
+        };
+
+        const referee1Data = await matchReferee(gameData.referee1);
+        if (referee1Data) {
+          gameData.referee1Photo = referee1Data.rosterPhoto;
+        }
+
+        const referee2Data = await matchReferee(gameData.referee2);
+        if (referee2Data) {
+          gameData.referee2Photo = referee2Data.rosterPhoto;
+        }
+
+        const linesperson1Data = await matchReferee(gameData.linesperson1);
+        if (linesperson1Data) {
+          gameData.linesperson1Photo = linesperson1Data.rosterPhoto;
+        }
+
+        const linesperson2Data = await matchReferee(gameData.linesperson2);
+        if (linesperson2Data) {
+          gameData.linesperson2Photo = linesperson2Data.rosterPhoto;
+        }
+
+        return { 
+          ...gameData, 
+          arenaName, 
+          arenaAddress,
+          timeZone, 
+          homeEquiptmentManager,
+          homeEquiptmentManagerPhone,
+          awayEquiptmentManager,
+          awayEquiptmentManagerPhone,
+          teamLogos: logos,
+          headCoaches: coaches
+        };
+      } else {
+        console.log('No such document!');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error fetching game:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = FIREBASE_AUTH.onAuthStateChanged(async (firebaseUser) => {
       if (firebaseUser) {
@@ -140,7 +251,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }, []);
 
   return (
-    <AppContext.Provider value={{ user, userFullName, userPhoneNumber, userRole, games, gameCount, loading, refreshUserData }}>
+    <AppContext.Provider value={{ 
+      user, 
+      userFullName, 
+      userPhoneNumber, 
+      userRole, 
+      games, 
+      gameCount, 
+      loading, 
+      refreshUserData,
+      fetchGameAndTeams 
+    }}>
       {children}
     </AppContext.Provider>
   );
