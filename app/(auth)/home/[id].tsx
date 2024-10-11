@@ -107,30 +107,32 @@ const GamePage = () => {
           <Text style={styles.atSymbol}>@</Text>
           <Image source={{ uri: teamLogos[game.homeTeam] }} style={styles.teamLogo} />
         </View>
-        <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
-        <TouchableOpacity onPress={() => handleArenaPress(game.arenaAddress)}>
-          <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={styles.circleButton}
-          onPress={() => Linking.openURL(generateUrl(game.gameID))}
-        >
-          <View style={styles.iconContainer}>
-            <FontAwesome5 name="hockey-puck" size={24} color="#ffffff" />
-          </View>
-          <Text style={styles.buttonText}>Game Center</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.circleButton}
-          onPress={() => Linking.openURL(generateUrl(game.gameID, true))}
-        >
-          <View style={styles.iconContainer}>
-            <Ionicons name="newspaper-outline" size={24} color="#ffffff" />
-          </View>
-          <Text style={styles.buttonText}>Gamesheet</Text>
-        </TouchableOpacity>
+        <View style={styles.gameInfoContainer}>
+          <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
+          <TouchableOpacity onPress={() => handleArenaPress(game.arenaAddress)}>
+            <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.floatingButtonsContainer}>
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => Linking.openURL(generateUrl(game.gameID))}
+          >
+            <View style={styles.iconContainer}>
+              <FontAwesome5 name="hockey-puck" size={24} color="#ffffff" />
+            </View>
+            <Text style={styles.buttonText}>Game Center</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.floatingButton}
+            onPress={() => Linking.openURL(generateUrl(game.gameID, true))}
+          >
+            <View style={styles.iconContainer}>
+              <Ionicons name="newspaper-outline" size={24} color="#ffffff" />
+            </View>
+            <Text style={styles.buttonText}>Gamesheet</Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <Text style={styles.disclaimer}>Note: Gamesheet not available until after completion of the game.</Text>
       <View style={styles.separator} />
@@ -378,27 +380,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 5,
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 20,
+  gameInfoContainer: {
+    alignItems: 'center',
     marginBottom: 20,
   },
-  circleButton: {
+  floatingButtonsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    right: 10,
+  },
+  floatingButton: {
     alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 10,
+    padding: 10,
   },
   iconContainer: {
     backgroundColor: '#ff6600',
     width: 40,
     height: 40,
-    borderRadius: 30,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 5,
   },
   buttonText: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#000000',
+    fontSize: 12,
     textAlign: 'center',
   },
   disclaimer: {
