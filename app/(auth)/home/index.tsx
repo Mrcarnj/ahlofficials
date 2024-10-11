@@ -25,24 +25,32 @@ export default function HomeScreen() {
   }, [refreshUserData]);
 
   const getNextExpenseReportDue = () => {
-    const startDate = new Date(2023, 9, 7); // October 7, 2023
+    const startDate = new Date(2024, 9, 21); // October 21, 2024
     const endDate = new Date(2025, 5, 30); // June 30, 2025
     const today = new Date();
     let nextDueDate = startDate;
 
     while (nextDueDate <= endDate) {
       if (nextDueDate >= today) {
-        const daysUntilDue = differenceInDays(nextDueDate, today);
+        const daysUntilDue = differenceInDays(addDays(nextDueDate, 1), today);
+        const rangeEndDate = new Date(nextDueDate);
+        const rangeStartDate = new Date(rangeEndDate);
+        rangeStartDate.setDate(rangeStartDate.getDate() - 14);
+
+        const dateRange = `${format(rangeStartDate, 'MMMM d')} - ${format(addDays(rangeEndDate, -1), 'MMMM d')}`;
+
         if (daysUntilDue === 0) {
-          return { text: "TODAY by 12pm EST", isToday: true };
+          return { text: "TODAY by 12pm EST", isToday: true, dateRange };
+        } else if (daysUntilDue === 1) {
+          return { text: "TOMORROW", isTomorrow: true, dateRange };
         } else {
-          return { text: `${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`, isToday: false };
+          return { text: `${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`, isToday: false, isTomorrow: false, dateRange };
         }
       }
       nextDueDate = addDays(nextDueDate, 14); // Add two weeks
     }
 
-    return { text: "No more expense reports due", isToday: false };
+    return { text: "No more expense reports due", isToday: false, isTomorrow: false, dateRange: "" };
   };
 
   const todayEvent = games.find(game => isToday(parse(game.gameDate, 'MM/dd/yyyy', new Date())));
@@ -103,14 +111,28 @@ export default function HomeScreen() {
         <View style={styles.expenseReportContainer}>
           <Text style={styles.reportTitle}>Expense Report Due: </Text>
           {(() => {
-            const { text, isToday } = getNextExpenseReportDue();
+            const { text, isToday, isTomorrow, dateRange } = getNextExpenseReportDue();
             return (
-              <Text style={[styles.expenseReportText, isToday && styles.expenseReportToday]}>
-                {text}
-              </Text>
+              <>
+                <Text style={[
+                  styles.expenseReportText, 
+                  isToday && styles.expenseReportToday,
+                  isTomorrow && styles.expenseReportTomorrow
+                ]}>
+                  {text}
+                </Text>
+              </>
             );
           })()}
         </View>
+        {(() => {
+          const { dateRange } = getNextExpenseReportDue();
+          return dateRange ? (
+            <Text style={styles.dateRangeText}>
+              Date Range Due: {dateRange}
+            </Text>
+          ) : null;
+        })()}
         <View style={styles.separator} />
         <Text style={styles.title}>Upcoming Games</Text>
         {upcomingEvents.map((event, index) => (
@@ -118,8 +140,7 @@ export default function HomeScreen() {
             <View style={styles.eventContent}>
               <Text style={styles.eventDate}>{format(parse(event.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
               <Text style={styles.eventDescription}>{`${event.awayTeam} @ ${event.homeTeam}`}</Text>
-              <Text style={styles.eventArena}>{event.arenaName || 'Arena not specified'}</Text>
-              <Text style={styles.eventTime}>{`${event.gameTime} ${event.timeZone || ''}`}</Text>
+              <Text style={styles.eventArena}>{event.arenaName || 'Arena not specified'} // {`${event.gameTime} ${event.timeZone || ''}`}</Text>
             </View>
             <Ionicons name="chevron-forward" size={24} color="#ff6600" style={styles.arrowIcon} />
           </TouchableOpacity>
@@ -240,5 +261,14 @@ const styles = StyleSheet.create({
   expenseReportToday: {
     fontWeight: 'bold',
     color: '#ff0000',
+  },
+  expenseReportTomorrow: {
+    fontWeight: 'bold',
+    color: '#ffa500',
+  },
+  dateRangeText: {
+    fontSize: 14,
+    color: '#888',
+    marginTop: 5,
   },
 });

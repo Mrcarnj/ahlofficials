@@ -7,6 +7,7 @@ import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 import { useAppContext } from '../../../context/AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GameID = () => {
   const { user } = useAuth();
@@ -49,9 +50,19 @@ const GameID = () => {
     const loadGame = async () => {
       setLoading(true);
       try {
-        const gameData = await fetchGameAndTeams(Array.isArray(id) ? id[0] : id);
+        const gameId = Array.isArray(id) ? id[0] : id;
+        const cachedGame = await AsyncStorage.getItem(`game_${gameId}`);
+        
+        if (cachedGame) {
+          const parsedGame = JSON.parse(cachedGame);
+          setData([parsedGame]);
+          setLoading(false);
+        }
+
+        const gameData = await fetchGameAndTeams(gameId);
         if (gameData) {
           setData([gameData]);
+          await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(gameData));
         } else {
           console.log('No such document!');
         }

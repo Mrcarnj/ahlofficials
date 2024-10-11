@@ -6,6 +6,7 @@ import { collection, onSnapshot, query } from 'firebase/firestore';
 import { Link, useRouter } from 'expo-router';
 import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface Game {
     id: string;
@@ -44,30 +45,59 @@ const index = () => {
     }
     
     useEffect(() => {
-        const gamesCollection = collection(FIRESTORE_DB, 'schedule');
-        const q = query(gamesCollection);
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const games = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                ...(doc.data() as Omit<Game, 'id'>)
-            }));
-            
-            // Custom sorting function
-            const sortedGames = games.sort((a, b) => {
-                const aNum = parseInt(a.gameID.split('-')[1]);
-                const bNum = parseInt(b.gameID.split('-')[1]);
-                return aNum - bNum;
+        const loadGames = async () => {
+            try {
+                const cachedGames = await AsyncStorage.getItem('adminGames');
+                if (cachedGames) {
+                    setGames(JSON.parse(cachedGames));
+                }
+            } catch (error) {
+                console.error('Error loading cached games:', error);
+            }
+
+            const gamesCollection = collection(FIRESTORE_DB, 'schedule');
+            const q = query(gamesCollection);
+            const unsubscribe = onSnapshot(q, async (snapshot) => {
+                const games = snapshot.docs.map((doc) => ({
+                    id: doc.id,
+                    ...(doc.data() as Omit<Game, 'id'>)
+                }));
+                
+                // Custom sorting function
+                const sortedGames = games.sort((a, b) => {
+                    const aID = a.gameID.toLowerCase();
+                    const bID = b.gameID.toLowerCase();
+                    const aIsEx = aID.startsWith('ex-');
+                    const bIsEx = bID.startsWith('ex-');
+                    
+                    if (aIsEx && bIsEx) {
+                        return parseInt(aID.split('-')[1]) - parseInt(bID.split('-')[1]);
+                    } else if (aIsEx) {
+                        return -1;
+                    } else if (bIsEx) {
+                        return 1;
+                    } else {
+                        return parseInt(aID) - parseInt(bID);
+                    }
+                });
+                
+                console.log('Sorted Games snapshot:', sortedGames);
+                setGames(sortedGames);
+                
+                // Cache the sorted games
+                await AsyncStorage.setItem('adminGames', JSON.stringify(sortedGames));
             });
-            
-            console.log('Sorted Games snapshot:', sortedGames);
-            setGames(sortedGames);
-        });
-        return () => unsubscribe();
+            return () => unsubscribe();
+        };
+
+        loadGames();
     }, []);
 
     const filteredAndSearchedGames = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        const twoWeeksFromNow = new Date(today);
+        twoWeeksFromNow.setDate(today.getDate() + 14);
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(today.getDate() - 7);
 
@@ -77,7 +107,7 @@ const index = () => {
             
             switch (filterOption) {
                 case 'Upcoming':
-                    return gameDate >= today;
+                    return gameDate >= today && gameDate <= twoWeeksFromNow;
                 case 'Previous 7 Days':
                     return gameDate >= sevenDaysAgo && gameDate < today;
                 case 'All':

@@ -4,6 +4,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../../../context/AppContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const generateUrl = (gameID, isGamesheet = false) => {
   let numericId;
@@ -63,13 +64,24 @@ const GamePage = () => {
   useEffect(() => {
     const loadGame = async () => {
       try {
-        const gameData = await fetchGameAndTeams(Array.isArray(id) ? id[0] : id);
-        if (gameData) {
-          setGame(gameData);
-          setTeamLogos(gameData.teamLogos);
-          setHeadCoaches(gameData.headCoaches);
+        const gameId = Array.isArray(id) ? id[0] : id;
+        const cachedGame = await AsyncStorage.getItem(`game_${gameId}`);
+        
+        if (cachedGame) {
+          const parsedGame = JSON.parse(cachedGame);
+          setGame(parsedGame);
+          setTeamLogos(parsedGame.teamLogos);
+          setHeadCoaches(parsedGame.headCoaches);
         } else {
-          console.log('No such document!');
+          const gameData = await fetchGameAndTeams(gameId);
+          if (gameData) {
+            setGame(gameData);
+            setTeamLogos(gameData.teamLogos);
+            setHeadCoaches(gameData.headCoaches);
+            await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(gameData));
+          } else {
+            console.log('No such document!');
+          }
         }
       } catch (error) {
         console.error('Error fetching game:', error);
@@ -280,7 +292,7 @@ const styles = StyleSheet.create({
     textAlign: 'center'
   },
   arena: {
-    fontSize: 16,
+    fontSize: 13,
     color: '#666666',
     textAlign: 'center',
     textDecorationLine: 'underline',

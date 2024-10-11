@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, Text, ViewStyle, TextStyle, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Calendar, DateData } from 'react-native-calendars';
 import { format, parse } from 'date-fns';
 import { useAppContext } from '../../../context/AppContext';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
@@ -25,17 +26,41 @@ export default function CalendarScreen() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const { games, loading } = useAppContext();
   const router = useRouter();
+  const [markedDates, setMarkedDates] = useState({});
 
-  const markedDates = games.reduce((acc, game) => {
-    const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
-    acc[formattedDate] = {
-      selected: true,
-      text: `${game.awayTeamAbbr}\n@\n${game.homeTeamAbbr}`,
-      gameTime: game.gameTime,
-      documentId: game.id, // Assuming each game object has an 'id' field
+  useEffect(() => {
+    const loadGames = async () => {
+      try {
+        const cachedGames = await AsyncStorage.getItem('calendarGames');
+        if (cachedGames) {
+          const parsedGames = JSON.parse(cachedGames);
+          processGames(parsedGames);
+        } else {
+          // Use the games from the context instead of fetching
+          await AsyncStorage.setItem('calendarGames', JSON.stringify(games));
+          processGames(games);
+        }
+      } catch (error) {
+        console.error('Error loading games:', error);
+      }
     };
-    return acc;
-  }, {});
+
+    loadGames();
+  }, [games]);
+
+  const processGames = (gamesData) => {
+    const dates = gamesData.reduce((acc, game) => {
+      const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
+      acc[formattedDate] = {
+        selected: true,
+        text: `${game.awayTeamAbbr}\n@\n${game.homeTeamAbbr}`,
+        gameTime: game.gameTime,
+        documentId: game.id,
+      };
+      return acc;
+    }, {});
+    setMarkedDates(dates);
+  };
 
   const onDayPress = (day: DateData) => {
     const selectedDate = day.dateString;
