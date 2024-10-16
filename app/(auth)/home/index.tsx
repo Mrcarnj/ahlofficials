@@ -137,10 +137,12 @@ export default function HomeScreen() {
         <Text style={styles.title}>Today</Text>
         {todayEvent ? (
           <TouchableOpacity onPress={() => navigateToGameDetails(todayEvent.id)} style={styles.eventItem}>
-            <Text style={styles.eventDate}>{format(parse(todayEvent.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
-            <Text style={styles.eventDescription}>{`${todayEvent.awayTeam} @ ${todayEvent.homeTeam}`}</Text>
-            <Text style={styles.eventArena}>{todayEvent.homeTeamData?.arenaName || 'Arena not specified'}</Text>
-            <Text style={styles.eventTime}>{`${todayEvent.gameTime} ${todayEvent.homeTeamData?.timeZone || ''}`}</Text>
+            <View style={styles.eventContent}>
+              <Text style={styles.eventDate}>{format(parse(todayEvent.gameDate, 'MM/dd/yyyy', new Date()), 'MM-dd-yyyy')}</Text>
+              <Text style={styles.eventDescription}>{`${todayEvent.awayTeam} @ ${todayEvent.homeTeam}`}</Text>
+              <Text style={styles.eventArena}>{todayEvent.homeTeamData?.arenaName || 'Arena not specified'} // {`${todayEvent.gameTime} ${todayEvent.homeTeamData?.timeZone || ''}`}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={24} color="#ff6600" style={styles.arrowIcon} />
           </TouchableOpacity>
         ) : (
           <Text style={styles.noEventText}>No Game Today</Text>
