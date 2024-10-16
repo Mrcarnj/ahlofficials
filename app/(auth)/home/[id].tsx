@@ -1,35 +1,29 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Image, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useAppContext } from '../../../context/AppContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const generateUrl = (gameID, isGamesheet = false) => {
-  let numericId;
-
-  if (gameID.startsWith('EX-')) {
-    const exNum = parseInt(gameID.split('-')[1]);
-    numericId = 1027636 + exNum;
-  } else {
-    numericId = 1027660 + parseInt(gameID);
-  }
-
+  const baseNumericID = 1026475;
+  const numericID = baseNumericID + parseInt(gameID) - 1;
+  
   if (isGamesheet) {
-    return `https://lscluster.hockeytech.com/game_reports/official-game-report.php?lang_id=1&client_code=ahl&game_id=${numericId}`;
+    return `https://lscluster.hockeytech.com/game_reports/official-game-report.php?lang_id=1&client_code=ahl&game_id=${numericID}`;
   } else {
-    return `https://theahl.com/stats/game-center/${numericId}`;
+    return `https://theahl.com/stats/game-center/${numericID}`;
   }
 };
 
 const GamePage = () => {
   const { id } = useLocalSearchParams();
-  const { fetchGameAndTeams } = useAppContext();
-  const [game, setGame] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [teamLogos, setTeamLogos] = useState({});
-  const [headCoaches, setHeadCoaches] = useState({});
+  const { games, loading } = useAppContext();
+  const game = games[Array.isArray(id) ? id[0] : id];
+
+  console.log('Game data:', game);
+  console.log('Away team data:', game?.awayTeamData);
+  console.log('Home team data:', game?.homeTeamData);
 
   const handlePhonePress = (phoneNumber) => {
     Alert.alert(
@@ -61,38 +55,6 @@ const GamePage = () => {
     Linking.openURL(url);
   };
 
-  useEffect(() => {
-    const loadGame = async () => {
-      try {
-        const gameId = Array.isArray(id) ? id[0] : id;
-        const cachedGame = await AsyncStorage.getItem(`game_${gameId}`);
-        
-        if (cachedGame) {
-          const parsedGame = JSON.parse(cachedGame);
-          setGame(parsedGame);
-          setTeamLogos(parsedGame.teamLogos);
-          setHeadCoaches(parsedGame.headCoaches);
-        } else {
-          const gameData = await fetchGameAndTeams(gameId);
-          if (gameData) {
-            setGame(gameData);
-            setTeamLogos(gameData.teamLogos);
-            setHeadCoaches(gameData.headCoaches);
-            await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(gameData));
-          } else {
-            console.log('No such document!');
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching game:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadGame();
-  }, [id, fetchGameAndTeams]);
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -115,14 +77,14 @@ const GamePage = () => {
         <Text style={styles.gameDate}>{game.gameDate}</Text>
         <Text style={styles.gameID}>Game# {game.gameID}</Text>
         <View style={styles.teamsContainer}>
-          <Image source={{ uri: teamLogos[game.awayTeam] }} style={styles.teamLogo} />
+          <Image source={{ uri: game.awayTeamData.logo }} style={styles.teamLogo} />
           <Text style={styles.atSymbol}>@</Text>
-          <Image source={{ uri: teamLogos[game.homeTeam] }} style={styles.teamLogo} />
+          <Image source={{ uri: game.homeTeamData.logo }} style={styles.teamLogo} />
         </View>
         <View style={styles.gameInfoContainer}>
-          <Text style={styles.gameTime}>{game.gameTime} {game.timeZone || ''}</Text>
-          <TouchableOpacity onPress={() => handleArenaPress(game.arenaAddress)}>
-            <Text style={styles.arena}>{game.arenaName || 'Arena not specified'}</Text>
+          <Text style={styles.gameTime}>{game.gameTime} {game.homeTeamData.timeZone}</Text>
+          <TouchableOpacity onPress={() => handleArenaPress(game.homeTeamData.arenaAddress)}>
+            <Text style={styles.arena}>{game.homeTeamData.arenaName || 'Arena not specified'}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.floatingButtonsContainer}>
@@ -152,33 +114,33 @@ const GamePage = () => {
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: game.referee1Photo || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.officials.referee1?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
-          <Text style={styles.refereeText}>{game.referee1}</Text>
+          <Text style={styles.refereeText}>{game.officials.referee1?.lastFirstFullName || 'N/A'}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: game.referee2Photo || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.officials.referee2?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
-          <Text style={styles.refereeText}>{game.referee2}</Text>
+          <Text style={styles.refereeText}>{game.officials.referee2?.lastFirstFullName || 'N/A'}</Text>
         </View>
       </View>
       <View style={styles.refereesRow}>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: game.linesperson1Photo || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.officials.linesperson1?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
-          <Text style={styles.refereeText}>{game.linesperson1}</Text>
+          <Text style={styles.refereeText}>{game.officials.linesperson1?.lastFirstFullName || 'N/A'}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
-            source={{ uri: game.linesperson2Photo || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.officials.linesperson2?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
-          <Text style={styles.refereeText}>{game.linesperson2}</Text>
+          <Text style={styles.refereeText}>{game.officials.linesperson2?.lastFirstFullName || 'N/A'}</Text>
         </View>
       </View>
       <View style={styles.separator} />
@@ -186,31 +148,31 @@ const GamePage = () => {
       <View style={styles.headCoachesRow}>
         <View style={styles.headCoachContainer}>
           <Image
-            source={{ uri: game.awayHeadCoachPic || headCoaches[game.awayTeam]?.picture || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.awayTeamData.headCoachPic || 'https://via.placeholder.com/150' }}
             style={styles.headCoachPic}
           />
-          <Text style={styles.headCoachText}>{headCoaches[game.awayTeam]?.name || 'N/A'}</Text>
+          <Text style={styles.headCoachText}>{game.awayTeamData.headCoachName || 'N/A'}</Text>
         </View>
         <View style={styles.headCoachContainer}>
           <Image
-            source={{ uri: game.homeHeadCoachPic || headCoaches[game.homeTeam]?.picture || 'https://via.placeholder.com/150' }}
+            source={{ uri: game.homeTeamData.headCoachPic || 'https://via.placeholder.com/150' }}
             style={styles.headCoachPic}
           />
-          <Text style={styles.headCoachText}>{headCoaches[game.homeTeam]?.name || 'N/A'}</Text>
+          <Text style={styles.headCoachText}>{game.homeTeamData.headCoachName || 'N/A'}</Text>
         </View>
       </View>
       <Text style={styles.titles}>Equipment Managers</Text>
       <View style={styles.equipmentManagersRow}>
         <View style={styles.equipmentManagerContainer}>
-          <Text style={styles.equipmentManagerName}>{game.awayEquiptmentManager || 'N/A'}</Text>
-          <TouchableOpacity onPress={() => handlePhonePress(game.awayEquiptmentManagerPhone)}>
-            <Text style={styles.equipmentManagerPhone}>{game.awayEquiptmentManagerPhone || 'N/A'}</Text>
+          <Text style={styles.equipmentManagerName}>{game.awayTeamData?.equipmentManagerName || 'N/A'}</Text>
+          <TouchableOpacity onPress={() => handlePhonePress(game.awayTeamData?.equipmentManagerPhone)}>
+            <Text style={styles.equipmentManagerPhone}>{game.awayTeamData?.equipmentManagerPhone || 'N/A'}</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.equipmentManagerContainer}>
-          <Text style={styles.equipmentManagerName}>{game.homeEquiptmentManager || 'N/A'}</Text>
-          <TouchableOpacity onPress={() => handlePhonePress(game.homeEquiptmentManagerPhone)}>
-            <Text style={styles.equipmentManagerPhone}>{game.homeEquiptmentManagerPhone || 'N/A'}</Text>
+          <Text style={styles.equipmentManagerName}>{game.homeTeamData?.equipmentManagerName || 'N/A'}</Text>
+          <TouchableOpacity onPress={() => handlePhonePress(game.homeTeamData?.equipmentManagerPhone)}>
+            <Text style={styles.equipmentManagerPhone}>{game.homeTeamData?.equipmentManagerPhone || 'N/A'}</Text>
           </TouchableOpacity>
         </View>
       </View>

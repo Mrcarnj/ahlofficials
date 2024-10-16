@@ -1,38 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TextInput, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../../config/FirebaseConfig';
 import { doc, updateDoc } from 'firebase/firestore';
 import { useAppContext } from '../../context/AppContext';
+import { logFirestoreRead } from '../../utils/firestoreLogger';
 
 export default function ProfileScreen() {
-  const { user, userFullName, userPhoneNumber, gameCount, loading, refreshUserData } = useAppContext();
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState(userPhoneNumber || '');
+  const { userData, games, loading } = useAppContext();
+  const [email, setEmail] = useState(userData?.email || '');
+  const [phone, setPhone] = useState(userData?.phoneNumber || '');
   const [isEditingEmail, setIsEditingEmail] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
 
-  const handleUpdate = async () => {
-    if (user) {
-      const userDocRef = doc(FIRESTORE_DB, 'roster', user.uid);
+  const gameCount = Object.keys(games).length;
+
+  const handleUpdate = useCallback(async () => {
+    if (userData) {
+      const userDocRef = doc(FIRESTORE_DB, 'roster', userData.uid);
       try {
         await updateDoc(userDocRef, {
           email: email,
           phoneNumber: phone,
         });
+        logFirestoreRead();
         setIsEditingEmail(false);
         setIsEditingPhone(false);
         Alert.alert('Success', 'Profile updated successfully');
-        refreshUserData();
+        // Note: We're not calling refreshUserData() here as it's no longer available in the new context
       } catch (error) {
         console.error('Error updating profile:', error);
         Alert.alert('Error', 'Failed to update profile');
       }
     }
-  };
+  }, [userData, email, phone]);
 
-  const renderEditableField = (value, setValue, isEditing, setIsEditing, label, keyboardType) => (
+  const renderEditableField = useCallback((value, setValue, isEditing, setIsEditing, label, keyboardType) => (
     <View style={styles.fieldContainer}>
       <Text style={styles.label}>{label}:</Text>
       <View style={styles.valueContainer}>
@@ -53,13 +57,13 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
     </View>
-  );
+  ), []);
 
-  if (loading) {
+  if (loading || !userData) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={{flex: 1, justifyContent: "center", alignItems: "center"}}>
-        <ActivityIndicator size="large" color="#0000ff"/>
+          <ActivityIndicator size="large" color="#0000ff"/>
         </View>
       </SafeAreaView>
     );
@@ -69,10 +73,10 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.container}>
         <Image
-          source={{ uri: 'https://via.placeholder.com/150' }}
+          source={{ uri: userData.rosterPhoto || 'https://via.placeholder.com/150' }}
           style={styles.profileImage}
         />
-        <Text style={styles.name}>{userFullName}</Text>
+        <Text style={styles.name}>{userData.firstName} {userData.lastName}</Text>
         <Text style={styles.gameCount}>Game Count: {gameCount}</Text>
         <View style={styles.infoSection}>
           {renderEditableField(email, setEmail, isEditingEmail, setIsEditingEmail, "Email", "email-address")}
@@ -81,7 +85,7 @@ export default function ProfileScreen() {
             <Text style={styles.link}>Update Profile</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.linkButton} onPress={() => FIREBASE_AUTH.signOut()}>
-            <Text style={styles.link}>Sign out </Text> 
+            <Text style={styles.link}>Sign out</Text> 
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -93,6 +97,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#000',
+  },
+  readCountText: {
+    color: '#ff6600',
+    fontSize: 14,
+    textAlign: 'center',
+    padding: 10,
   },
   scrollView: {
     flex: 1,

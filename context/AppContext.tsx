@@ -1,272 +1,238 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { FIREBASE_AUTH, FIRESTORE_DB } from '../config/FirebaseConfig';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc, documentId, QueryDocumentSnapshot } from 'firebase/firestore';
 import { User } from 'firebase/auth';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext';
 
-interface AppUser extends User {
-  role?: string;
+// Define types for our data structures
+interface RosterData {
+  email: string;
+  firstName: string;
+  lastName: string;
+  lastFirstFullName: string;
+  phoneNumber: string;
+  uid: string;
+  rosterPhoto: string;
+}
+
+interface TeamData {
+  abbreviation: string;
+  arenaAddress: string;
+  arenaName: string;
+  assistantCoach1: string;
+  assistantCoach2: string;
+  city: string;
+  equipmentManagerName: string;
+  equipmentManagerPhone: string;
+  headCoachName: string;
+  headCoachPic: string;
+  id: string;
+  logo: string;
+  timeZone: string;
+}
+
+interface ScheduleData {
+  awayTeam: string;
+  gameDate: string;
+  gameID: string;
+  gameTime: string;
+  homeTeam: string;
+  id: string;
+  linesperson1: string;
+  linesperson2: string;
+  referee1: string;
+  referee2: string;
+}
+
+export interface GameData extends ScheduleData {
+  awayTeamData: TeamData;
+  homeTeamData: TeamData;
+  officials: {
+    referee1: RosterData;
+    referee2: RosterData;
+    linesperson1: RosterData;
+    linesperson2: RosterData;
+  };
 }
 
 interface AppContextType {
-  user: AppUser | null;
-  userFullName: string;
-  userPhoneNumber: string;
-  userRole: string;
-  games: any[];
-  gameCount: number;
+  userData: RosterData | null;
+  games: { [key: string]: GameData };
   loading: boolean;
-  refreshUserData: () => Promise<void>;
-  fetchGameAndTeams: (gameId: string) => Promise<any>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+const AppContext = createContext<AppContextType>({
+  userData: null,
+  games: {},
+  loading: true,
+});
 
-export const useAppContext = () => {
-  const context = useContext(AppContext);
-  if (context === undefined) {
-    throw new Error('useAppContext must be used within an AppProvider');
-  }
-  return context;
-};
+export const useAppContext = () => useContext(AppContext);
 
-interface AppProviderProps {
-  children: React.ReactNode;
-}
-
-export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<AppUser | null>(FIREBASE_AUTH.currentUser);
-  const [userFullName, setUserFullName] = useState('');
-  const [userPhoneNumber, setUserPhoneNumber] = useState('');
-  const [userRole, setUserRole] = useState('');
-  const [games, setGames] = useState([]);
-  const [gameCount, setGameCount] = useState(0);
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [userData, setUserData] = useState<RosterData | null>(null);
+  const [games, setGames] = useState<{ [key: string]: GameData }>({});
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
-  const fetchUserData = async (user: AppUser) => {
-    setLoading(true);
-    try {
-      const userDocRef = collection(FIRESTORE_DB, 'roster');
-      const userQuery = query(userDocRef, where('uid', '==', user.uid));
-      const userSnapshot = await getDocs(userQuery);
-      
-      if (!userSnapshot.empty) {
-        const userData = userSnapshot.docs[0].data();
-        const fullName = `${userData.firstName} ${userData.lastName}`;
-        setUserFullName(fullName);
-        setUserPhoneNumber(userData.phoneNumber || '');
-        setUserRole(userData.role || 'user');
-        user.role = userData.role || 'user';
-        
-        const scheduleRef = collection(FIRESTORE_DB, 'schedule');
-        const queries = [
-          query(scheduleRef, where('referee1', '==', fullName)),
-          query(scheduleRef, where('referee2', '==', fullName)),
-          query(scheduleRef, where('linesperson1', '==', fullName)),
-          query(scheduleRef, where('linesperson2', '==', fullName))
-        ];
+  useEffect(() => {
+    const fetchData = async () => {
+      if (user?.email) {
+        setLoading(true);
+        try {
+          // Fetch user's roster data
+          const userRosterData = await fetchUserRosterData(user.email);
+          setUserData(userRosterData);
 
-        const scheduleSnapshots = await Promise.all(queries.map(q => getDocs(q)));
-        const allDocs = scheduleSnapshots.flatMap(snapshot => snapshot.docs);
-        
-        const fetchedGames = await Promise.all(allDocs.map(async (doc) => {
-          const gameData = doc.data();
-          const teamsRef = collection(FIRESTORE_DB, 'teams');
-          
-          const homeTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.homeTeam)));
-          const homeTeamData = homeTeamDoc.docs[0]?.data() || {};
-          const homeTeamAbbr = homeTeamData.abbreviation || '';
-          const arenaName = homeTeamData.arenaName || '';
-          const arenaAddress = homeTeamData.arenaAddress || '';
-          const timeZone = homeTeamData.timeZone || '';
-          const homeHeadCoachPic = homeTeamData.headCoachPic || '';
-          const homeEquiptmentManager = homeTeamData.equipmentManagerName || '';
-          const homeEquiptmentManagerPhone = homeTeamData.equipmentManagerPhone || '';
-          
-          const awayTeamDoc = await getDocs(query(teamsRef, where('city', '==', gameData.awayTeam)));
-          const awayTeamData = awayTeamDoc.docs[0]?.data() || {};
-          const awayTeamAbbr = awayTeamData.abbreviation || '';
-          const awayHeadCoachPic = awayTeamData.headCoachPic || '';
-          const awayEquiptmentManager = awayTeamData.equipmentManagerName || '';
-          const awayEquiptmentManagerPhone = awayTeamData.equipmentManagerPhone || '';
-
-          return {
-            ...gameData,
-            homeTeamAbbr,
-            awayTeamAbbr,
-            arenaName,
-            arenaAddress,
-            timeZone,
-            homeHeadCoachPic,
-            awayHeadCoachPic,
-            homeEquiptmentManager,
-            homeEquiptmentManagerPhone,
-            awayEquiptmentManager,
-            awayEquiptmentManagerPhone
-          };
-        }));
-
-        setGames(fetchedGames);
-        setGameCount(fetchedGames.length);
+          if (userRosterData) {
+            // Fetch schedule data for the user
+            const scheduleData = await fetchScheduleData(userRosterData.lastFirstFullName);
+            
+            // Fetch additional data for all games in batch
+            const gamesData = await fetchAllGamesData(scheduleData);
+            setGames(gamesData);
+          }
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        } finally {
+          setLoading(false);
+        }
       }
-    } catch (error) {
-      console.error('Error fetching user data:', error);
-    } finally {
-      setLoading(false);
+    };
+
+    fetchData();
+  }, [user]);
+
+  // Fetch user's roster data
+  const fetchUserRosterData = async (email: string): Promise<RosterData | null> => {
+    const rosterRef = collection(FIRESTORE_DB, 'roster');
+    const q = query(rosterRef, where('email', '==', email));
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const userData = querySnapshot.docs[0].data() as RosterData;
+      return { ...userData, uid: querySnapshot.docs[0].id };
     }
+    return null;
   };
 
-  const refreshUserData = async () => {
-    if (user) {
-      await fetchUserData(user);
-    }
+  // Fetch schedule data for the user
+  const fetchScheduleData = async (lastFirstFullName: string): Promise<ScheduleData[]> => {
+    console.log('Fetching schedule data for:', lastFirstFullName);
+    const scheduleRef = collection(FIRESTORE_DB, 'schedule');
+    const officialRoles = ['referee1', 'referee2', 'linesperson1', 'linesperson2'];
+    
+    // Create queries for each role
+    const queries = officialRoles.map(role => 
+      query(scheduleRef, where(role, '==', lastFirstFullName))
+    );
+
+    // Execute all queries
+    const querySnapshots = await Promise.all(queries.map(q => getDocs(q)));
+
+    // Combine and deduplicate results
+    const uniqueResults = new Map();
+    querySnapshots.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        if (!uniqueResults.has(doc.id)) {
+          uniqueResults.set(doc.id, { ...doc.data(), id: doc.id });
+        }
+      });
+    });
+
+    const results = Array.from(uniqueResults.values()) as ScheduleData[];
+    console.log('Schedule query result count:', results.length);
+
+    return results;
   };
 
-  const fetchGameAndTeams = async (gameId: string) => {
+  // Fetch additional data for all games in batch
+  const fetchAllGamesData = async (scheduleData: ScheduleData[]): Promise<{ [key: string]: GameData }> => {
     try {
-      const docRef = doc(FIRESTORE_DB, 'schedule', gameId);
-      const docSnap = await getDoc(docRef);
+      console.log('Schedule data:', scheduleData);
 
-      if (docSnap.exists()) {
-        const gameData = docSnap.data();
+      const teamCities = new Set(scheduleData.flatMap(schedule => [schedule.awayTeam, schedule.homeTeam]));
+      const officialNames = new Set(scheduleData.flatMap(schedule => [schedule.referee1, schedule.referee2, schedule.linesperson1, schedule.linesperson2]));
 
-        // Fetch team logos, arena name, and equipment manager info
-        const teamsRef = collection(FIRESTORE_DB, 'teams');
-        const teamsQuery = query(teamsRef, where('city', 'in', [gameData.awayTeam, gameData.homeTeam]));
-        const teamsSnapshot = await getDocs(teamsQuery);
+      console.log('Team cities:', Array.from(teamCities));
+      console.log('Official names:', Array.from(officialNames));
 
-        const logos = {};
-        const coaches = {};
-        let arenaName = '';
-        let arenaAddress = '';
-        let timeZone = '';
-        let homeEquiptmentManager = '';
-        let homeEquiptmentManagerPhone = '';
-        let awayEquiptmentManager = '';
-        let awayEquiptmentManagerPhone = '';
+      const [teamsData, officialsData] = await Promise.all([
+        fetchTeamsData(Array.from(teamCities)),
+        fetchOfficialsData(Array.from(officialNames))
+      ]);
 
-        teamsSnapshot.forEach((doc) => {
-          const teamData = doc.data();
-          logos[teamData.city] = teamData.logo;
-          coaches[teamData.city] = {
-            name: teamData.headCoachName,
-            picture: teamData.headCoachPic
-          };
-          if (teamData.city === gameData.homeTeam) {
-            arenaName = teamData.arenaName;
-            arenaAddress = teamData.arenaAddress;
-            timeZone = teamData.timeZone;
-            homeEquiptmentManager = teamData.equipmentManagerName || '';
-            homeEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
-          } else if (teamData.city === gameData.awayTeam) {
-            awayEquiptmentManager = teamData.equipmentManagerName || '';
-            awayEquiptmentManagerPhone = teamData.equipmentManagerPhone || '';
+      console.log('Teams data:', teamsData);
+      console.log('Officials data:', officialsData);
+
+      const gamesData: { [key: string]: GameData } = {};
+      for (const schedule of scheduleData) {
+        gamesData[schedule.id] = {
+          ...schedule,
+          awayTeamData: teamsData[schedule.awayTeam],
+          homeTeamData: teamsData[schedule.homeTeam],
+          officials: {
+            referee1: officialsData[schedule.referee1],
+            referee2: officialsData[schedule.referee2],
+            linesperson1: officialsData[schedule.linesperson1],
+            linesperson2: officialsData[schedule.linesperson2]
           }
-        });
-
-        // Fetch roster data
-        const rosterRef = collection(FIRESTORE_DB, 'roster');
-        const rosterSnapshot = await getDocs(rosterRef);
-        const rosterData = rosterSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...(doc.data() as { firstName: string; lastName: string })
-        }));
-
-        // Match referees with roster data
-        const matchReferee = async (refereeName) => {
-          const [firstName, lastName] = refereeName.split(' ');
-          const matchedRef = rosterData.find(ref => 
-            ref.firstName.toLowerCase() === firstName.toLowerCase() && 
-            ref.lastName.toLowerCase() === lastName.toLowerCase()
-          );
-          if (matchedRef) {
-            const rosterDocRef = doc(FIRESTORE_DB, 'roster', matchedRef.id);
-            const rosterDocSnap = await getDoc(rosterDocRef);
-            if (rosterDocSnap.exists()) {
-              const rosterData = rosterDocSnap.data();
-              return { id: matchedRef.id, rosterPhoto: rosterData.rosterPhoto };
-            }
-          }
-          return null;
         };
-
-        const referee1Data = await matchReferee(gameData.referee1);
-        if (referee1Data) {
-          gameData.referee1Photo = referee1Data.rosterPhoto;
-        }
-
-        const referee2Data = await matchReferee(gameData.referee2);
-        if (referee2Data) {
-          gameData.referee2Photo = referee2Data.rosterPhoto;
-        }
-
-        const linesperson1Data = await matchReferee(gameData.linesperson1);
-        if (linesperson1Data) {
-          gameData.linesperson1Photo = linesperson1Data.rosterPhoto;
-        }
-
-        const linesperson2Data = await matchReferee(gameData.linesperson2);
-        if (linesperson2Data) {
-          gameData.linesperson2Photo = linesperson2Data.rosterPhoto;
-        }
-
-        return { 
-          ...gameData, 
-          arenaName, 
-          arenaAddress,
-          timeZone, 
-          homeEquiptmentManager,
-          homeEquiptmentManagerPhone,
-          awayEquiptmentManager,
-          awayEquiptmentManagerPhone,
-          teamLogos: logos,
-          headCoaches: coaches,
-          referee1Photo: gameData.referee1Photo,
-          referee2Photo: gameData.referee2Photo,
-          linesperson1Photo: gameData.linesperson1Photo,
-          linesperson2Photo: gameData.linesperson2Photo
-        };
-      } else {
-        console.log('No such document!');
-        return null;
       }
+
+      console.log('Games data:', gamesData);
+      return gamesData;
     } catch (error) {
-      console.error('Error fetching game:', error);
+      console.error('Error in fetchAllGamesData:', error);
       throw error;
     }
   };
 
-  useEffect(() => {
-    const unsubscribe = FIREBASE_AUTH.onAuthStateChanged(async (firebaseUser) => {
-      if (firebaseUser) {
-        const appUser: AppUser = { ...firebaseUser };
-        setUser(appUser);
-        await fetchUserData(appUser);
-      } else {
-        setUser(null);
-        setUserFullName('');
-        setUserRole('');
-        setGames([]);
-        setGameCount(0);
-      }
-      setLoading(false);
+  // Fetch team data for multiple cities in batch
+  const fetchTeamsData = async (cities: string[]): Promise<{ [key: string]: TeamData }> => {
+    const teamsData: { [key: string]: TeamData } = {};
+    if (cities.length === 0) return teamsData;
+
+    const teamsRef = collection(FIRESTORE_DB, 'teams');
+    const q = query(teamsRef, where('city', 'in', cities));
+    const querySnapshot = await getDocs(q);
+    
+    querySnapshot.forEach(doc => {
+      const data = doc.data() as TeamData;
+      teamsData[data.city] = { ...data, id: doc.id };
     });
 
-    return () => unsubscribe();
-  }, []);
+    console.log('Fetched teams data:', teamsData); // Add this line for debugging
+    return teamsData;
+  };
+
+  // Fetch officials' data in batch
+  const fetchOfficialsData = async (officialNames: string[]): Promise<{ [key: string]: RosterData }> => {
+    const officialsData: { [key: string]: RosterData } = {};
+    if (officialNames.length === 0) return officialsData;
+
+    const rosterRef = collection(FIRESTORE_DB, 'roster');
+    const q = query(rosterRef, where('lastFirstFullName', 'in', officialNames));
+    const querySnapshot = await getDocs(q);
+
+    querySnapshot.forEach(doc => {
+      const data = doc.data() as RosterData;
+      officialsData[data.lastFirstFullName] = { 
+        ...data, 
+        uid: doc.id,
+        rosterPhoto: data.rosterPhoto || '' // Ensure rosterPhoto is always defined
+      };
+    });
+
+    console.log('Fetched officials data:', officialsData);
+    return officialsData;
+  };
 
   return (
-    <AppContext.Provider value={{ 
-      user, 
-      userFullName, 
-      userPhoneNumber, 
-      userRole, 
-      games, 
-      gameCount, 
-      loading, 
-      refreshUserData,
-      fetchGameAndTeams 
-    }}>
+    <AppContext.Provider value={{ userData, games, loading }}>
       {children}
     </AppContext.Provider>
   );
 };
+

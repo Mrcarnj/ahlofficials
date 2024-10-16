@@ -5,7 +5,6 @@ import { Calendar, DateData } from 'react-native-calendars';
 import { format, parse } from 'date-fns';
 import { useAppContext } from '../../../context/AppContext';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const screenWidth = Dimensions.get('window').width;
 const calendarWidth = screenWidth * 0.98; // 98% of screen width
@@ -29,38 +28,22 @@ export default function CalendarScreen() {
   const [markedDates, setMarkedDates] = useState({});
 
   useEffect(() => {
-    const loadGames = async () => {
-      try {
-        const cachedGames = await AsyncStorage.getItem('calendarGames');
-        if (cachedGames) {
-          const parsedGames = JSON.parse(cachedGames);
-          processGames(parsedGames);
-        } else {
-          // Use the games from the context instead of fetching
-          await AsyncStorage.setItem('calendarGames', JSON.stringify(games));
-          processGames(games);
-        }
-      } catch (error) {
-        console.error('Error loading games:', error);
-      }
+    const loadMarkedDates = () => {
+      const newMarkedDates = Object.values(games).reduce((acc, game) => {
+        const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
+        acc[formattedDate] = {
+          selected: true,
+          text: `${game.awayTeamData.abbreviation}\n@\n${game.homeTeamData.abbreviation}`,
+          gameTime: `${game.gameTime} ${game.homeTeamData.timeZone}`,
+          documentId: game.id,
+        };
+        return acc;
+      }, {});
+      setMarkedDates(newMarkedDates);
     };
 
-    loadGames();
+    loadMarkedDates();
   }, [games]);
-
-  const processGames = (gamesData) => {
-    const dates = gamesData.reduce((acc, game) => {
-      const formattedDate = format(parse(game.gameDate, 'MM/dd/yyyy', new Date()), 'yyyy-MM-dd');
-      acc[formattedDate] = {
-        selected: true,
-        text: `${game.awayTeamAbbr}\n@\n${game.homeTeamAbbr}`,
-        gameTime: game.gameTime,
-        documentId: game.id,
-      };
-      return acc;
-    }, {});
-    setMarkedDates(dates);
-  };
 
   const onDayPress = (day: DateData) => {
     const selectedDate = day.dateString;

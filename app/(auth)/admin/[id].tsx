@@ -4,6 +4,7 @@ import { useGlobalSearchParams, useRouter } from 'expo-router'
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
 import { collection, collectionGroup, onSnapshot, orderBy, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
 import Spinner from 'react-native-loading-spinner-overlay';
+import { logFirestoreRead } from '../../../utils/firestoreLogger';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
 import { useAppContext } from '../../../context/AppContext';
@@ -62,6 +63,20 @@ const GameID = () => {
         const gameData = await fetchGameAndTeams(gameId);
         if (gameData) {
           setData([gameData]);
+          setTeamLogos({
+            [gameData.awayTeam]: gameData.awayTeamLogo || null,
+            [gameData.homeTeam]: gameData.homeTeamLogo || null
+          });
+          setHeadCoaches({
+            [gameData.awayTeam]: { 
+              name: gameData.awayHeadCoachName || null, 
+              picture: gameData.awayHeadCoachPic || null 
+            },
+            [gameData.homeTeam]: { 
+              name: gameData.homeHeadCoachName || null, 
+              picture: gameData.homeHeadCoachPic || null 
+            }
+          });
           await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(gameData));
         } else {
           console.log('No such document!');
@@ -75,21 +90,27 @@ const GameID = () => {
 
     loadGame();
 
-    const rosterQuery = query(
-      collection(FIRESTORE_DB, 'roster'),
-      orderBy('lastFirstFullName')
-    );
-    const rosterUnsubscribe = onSnapshot(rosterQuery, (snapshot) => {
-      const rosterData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setRosterData(rosterData);
-    });
-
-    return () => {
-      rosterUnsubscribe();
+    const loadRoster = async () => {
+      const cachedRoster = await AsyncStorage.getItem('roster');
+      if (cachedRoster) {
+        setRosterData(JSON.parse(cachedRoster));
+      } else {
+        const rosterQuery = query(
+          collection(FIRESTORE_DB, 'roster'),
+          orderBy('lastFirstFullName')
+        );
+        const snapshot = await getDocs(rosterQuery);
+        logFirestoreRead(snapshot.docs.length);
+        const rosterData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setRosterData(rosterData);
+        await AsyncStorage.setItem('roster', JSON.stringify(rosterData));
+      }
     };
+
+    loadRoster();
   }, [id, fetchGameAndTeams]);
 
   const handleRemoveOfficial = (position: 'referee1' | 'referee2' | 'linesperson1' | 'linesperson2') => {
@@ -142,6 +163,7 @@ const GameID = () => {
     // Fetch the official's photo URL
     const officialDocRef = doc(FIRESTORE_DB, 'roster', official.id);
     const officialDocSnap = await getDoc(officialDocRef);
+    logFirestoreRead();
     if (officialDocSnap.exists()) {
       const officialData = officialDocSnap.data();
       newChanges[`${selectedPosition}Photo`] = officialData.rosterPhoto || null;
@@ -214,6 +236,11 @@ const GameID = () => {
               <View style={styles.centeredContent}>
                 <Text style={styles.gameNumber}>Game {data.gameID}</Text>
                 <Text style={styles.gameText}>{data.gameDate}</Text>
+                <View style={styles.teamsContainer}>
+                  <Text style={styles.teamAbbr}>{data.awayTeamAbbr}</Text>
+                  <Text style={styles.atSymbol}>@</Text>
+                  <Text style={styles.teamAbbr}>{data.homeTeamAbbr}</Text>
+                </View>
                 <Text style={styles.gameText}>{data.awayTeam} @ {data.homeTeam}</Text>
               </View>
               <Text style={styles.titles}>Officials Crew</Text>
@@ -398,6 +425,24 @@ const styles = StyleSheet.create({
   centeredContent: {
     alignItems: 'center',
     marginBottom: 20,
+  },
+  teamsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  teamAbbr: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginHorizontal: 10,
+  },
+  atSymbol: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginHorizontal: 5,
   },
   safeArea: {
     flex: 1,

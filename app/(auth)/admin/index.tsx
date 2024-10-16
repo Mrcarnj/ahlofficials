@@ -2,8 +2,9 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Tex
 import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../../../context/AuthContext';
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
-import { collection, onSnapshot, query } from 'firebase/firestore';
+import { collection, onSnapshot, query, getDocs } from 'firebase/firestore';
 import { Link, useRouter } from 'expo-router';
+import { logFirestoreRead } from '../../../utils/firestoreLogger';
 import Spinner from 'react-native-loading-spinner-overlay';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -51,13 +52,11 @@ const index = () => {
                 if (cachedGames) {
                     setGames(JSON.parse(cachedGames));
                 }
-            } catch (error) {
-                console.error('Error loading cached games:', error);
-            }
 
-            const gamesCollection = collection(FIRESTORE_DB, 'schedule');
-            const q = query(gamesCollection);
-            const unsubscribe = onSnapshot(q, async (snapshot) => {
+                const gamesCollection = collection(FIRESTORE_DB, 'schedule');
+                const q = query(gamesCollection);
+                const snapshot = await getDocs(q);
+                logFirestoreRead(snapshot.docs.length);
                 const games = snapshot.docs.map((doc) => ({
                     id: doc.id,
                     ...(doc.data() as Omit<Game, 'id'>)
@@ -86,8 +85,9 @@ const index = () => {
                 
                 // Cache the sorted games
                 await AsyncStorage.setItem('adminGames', JSON.stringify(sortedGames));
-            });
-            return () => unsubscribe();
+            } catch (error) {
+                console.error('Error loading games:', error);
+            }
         };
 
         loadGames();
@@ -117,14 +117,14 @@ const index = () => {
         }).filter(game => game.gameID.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [games, filterOption, searchQuery]);
 
-    const FilterButton = ({ title, isActive }: { title: FilterOption; isActive: boolean }) => (
+    const FilterButton = useCallback(({ title, isActive }: { title: FilterOption; isActive: boolean }) => (
         <TouchableOpacity
             style={[styles.filterButton, isActive && styles.activeFilterButton]}
             onPress={() => setFilterOption(title)}
         >
             <Text style={[styles.filterButtonText, isActive && styles.activeFilterButtonText]}>{title}</Text>
         </TouchableOpacity>
-    );
+    ), []);
 
     const handleSearch = useCallback((text: string) => {
         setSearchQuery(text);
