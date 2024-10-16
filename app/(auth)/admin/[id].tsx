@@ -1,21 +1,20 @@
 import { View, Text, StyleSheet, SafeAreaView, ScrollView, Image, ActivityIndicator, TouchableOpacity, Modal, FlatList, Alert } from 'react-native'
-import React, { useEffect, useLayoutEffect, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useGlobalSearchParams, useRouter } from 'expo-router'
 import { FIRESTORE_DB } from '../../../config/FirebaseConfig';
-import { collection, collectionGroup, onSnapshot, orderBy, query, where, doc, updateDoc, getDoc } from 'firebase/firestore';
-import Spinner from 'react-native-loading-spinner-overlay';
+import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
 import { logFirestoreRead } from '../../../utils/firestoreLogger';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../context/AuthContext';
-import { useAppContext } from '../../../context/AppContext';
+import { useAppContext, GameData } from '../../../context/AppContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GameID = () => {
   const { user } = useAuth();
-  const { fetchGameAndTeams } = useAppContext();
+  const { fetchAllGamesForAdmin } = useAppContext();
   const { id } = useGlobalSearchParams();
   const router = useRouter();
-  const [allData, setData] = useState([]);
+  const [gameData, setGameData] = useState<GameData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [rosterData, setRosterData] = useState([]);
@@ -47,7 +46,7 @@ const GameID = () => {
     );
   }
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const loadGame = async () => {
       setLoading(true);
       try {
@@ -56,28 +55,15 @@ const GameID = () => {
         
         if (cachedGame) {
           const parsedGame = JSON.parse(cachedGame);
-          setData([parsedGame]);
+          setGameData(parsedGame);
           setLoading(false);
         }
 
-        const gameData = await fetchGameAndTeams(gameId);
-        if (gameData) {
-          setData([gameData]);
-          setTeamLogos({
-            [gameData.awayTeam]: gameData.awayTeamLogo || null,
-            [gameData.homeTeam]: gameData.homeTeamLogo || null
-          });
-          setHeadCoaches({
-            [gameData.awayTeam]: { 
-              name: gameData.awayHeadCoachName || null, 
-              picture: gameData.awayHeadCoachPic || null 
-            },
-            [gameData.homeTeam]: { 
-              name: gameData.homeHeadCoachName || null, 
-              picture: gameData.homeHeadCoachPic || null 
-            }
-          });
-          await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(gameData));
+        const allGames = await fetchAllGamesForAdmin();
+        const game = allGames[gameId];
+        if (game) {
+          setGameData(game);
+          await AsyncStorage.setItem(`game_${gameId}`, JSON.stringify(game));
         } else {
           console.log('No such document!');
         }
@@ -95,10 +81,7 @@ const GameID = () => {
       if (cachedRoster) {
         setRosterData(JSON.parse(cachedRoster));
       } else {
-        const rosterQuery = query(
-          collection(FIRESTORE_DB, 'roster'),
-          orderBy('lastFirstFullName')
-        );
+        const rosterQuery = collection(FIRESTORE_DB, 'roster');
         const snapshot = await getDocs(rosterQuery);
         logFirestoreRead(snapshot.docs.length);
         const rosterData = snapshot.docs.map((doc) => ({
@@ -111,10 +94,10 @@ const GameID = () => {
     };
 
     loadRoster();
-  }, [id, fetchGameAndTeams]);
+  }, [id, fetchAllGamesForAdmin]);
 
   const handleRemoveOfficial = (position: 'referee1' | 'referee2' | 'linesperson1' | 'linesperson2') => {
-    const officialName = changes[position] || allData[0][position];
+    const officialName = changes[position] || gameData?.[position];
     Alert.alert(
       "Remove Official",
       `Are you sure you want to remove ${officialName} from the game?`,
@@ -160,13 +143,10 @@ const GameID = () => {
     // If not already assigned, update the changes
     newChanges[selectedPosition] = officialFullName;
 
-    // Fetch the official's photo URL
-    const officialDocRef = doc(FIRESTORE_DB, 'roster', official.id);
-    const officialDocSnap = await getDoc(officialDocRef);
-    logFirestoreRead();
-    if (officialDocSnap.exists()) {
-      const officialData = officialDocSnap.data();
-      newChanges[`${selectedPosition}Photo`] = officialData.rosterPhoto || null;
+    // Use the official's photo from the rosterData
+    const selectedOfficial = rosterData.find(item => item.id === official.id);
+    if (selectedOfficial) {
+      newChanges[`${selectedPosition}Photo`] = selectedOfficial.rosterPhoto || null;
     }
 
     setChanges(newChanges);
@@ -176,7 +156,7 @@ const GameID = () => {
   const handleSaveChanges = async () => {
     // Check if all positions are filled
     const positions = ['referee1', 'referee2', 'linesperson1', 'linesperson2'];
-    const missingPositions = positions.filter(pos => !changes[pos] && !allData[0][pos]);
+    const missingPositions = positions.filter(pos => !changes[pos] && !gameData?.[pos]);
     
     if (missingPositions.length > 0) {
       Alert.alert(
@@ -187,7 +167,7 @@ const GameID = () => {
     }
 
     // Check for duplicate officials
-    const officials = positions.map(pos => changes[pos] || allData[0][pos]);
+    const officials = positions.map(pos => changes[pos] || gameData?.[pos]);
     const uniqueOfficials = new Set(officials);
     if (uniqueOfficials.size !== positions.length) {
       Alert.alert(
@@ -199,12 +179,12 @@ const GameID = () => {
 
     setLoading(true);
     try {
-      const gameRef = doc(FIRESTORE_DB, 'schedule', allData[0].id);
+      const gameRef = doc(FIRESTORE_DB, 'schedule', gameData?.id || '');
       await updateDoc(gameRef, changes);
       setChanges({});
       // Refresh the data
-      const updatedData = {...allData[0], ...changes};
-      setData([updatedData]);
+      const updatedData = {...gameData, ...changes};
+      setGameData(updatedData);
       Alert.alert("Success", "Changes saved successfully.");
     } catch (error) {
       console.error("Error updating document: ", error);
@@ -227,93 +207,97 @@ const GameID = () => {
     );
   }
 
+  if (!gameData) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.text}>Game not found</Text>
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <ScrollView>
-          {allData.map((data) => (
-            <View key={data.id}>
-              <View style={styles.centeredContent}>
-                <Text style={styles.gameNumber}>Game {data.gameID}</Text>
-                <Text style={styles.gameText}>{data.gameDate}</Text>
-                <View style={styles.teamsContainer}>
-                  <Text style={styles.teamAbbr}>{data.awayTeamAbbr}</Text>
-                  <Text style={styles.atSymbol}>@</Text>
-                  <Text style={styles.teamAbbr}>{data.homeTeamAbbr}</Text>
-                </View>
-                <Text style={styles.gameText}>{data.awayTeam} @ {data.homeTeam}</Text>
-              </View>
-              <Text style={styles.titles}>Officials Crew</Text>
-              <View style={styles.refereesRow}>
-                <View style={styles.refereeContainer}>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('referee1')}>
-                    <Ionicons name="remove-circle" size={24} color="red" />
-                  </TouchableOpacity>
-                  <Image
-                    source={{ uri: changes.referee1Photo || data.referee1Photo || 'https://via.placeholder.com/150' }}
-                    style={styles.profileImageRef}
-                  />
-                  {changes.referee1 === null ? (
-                    <TouchableOpacity onPress={() => handleAddOfficial('referee1')}>
-                      <Text style={styles.addOfficialText}>+ Add Official</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.refereeText}>{changes.referee1 || data.referee1}</Text>
-                  )}
-                </View>
-                <View style={styles.refereeContainer}>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('referee2')}>
-                    <Ionicons name="remove-circle" size={24} color="red" />
-                  </TouchableOpacity>
-                  <Image
-                    source={{ uri: changes.referee2Photo || data.referee2Photo || 'https://via.placeholder.com/150' }}
-                    style={styles.profileImageRef}
-                  />
-                  {changes.referee2 === null ? (
-                    <TouchableOpacity onPress={() => handleAddOfficial('referee2')}>
-                      <Text style={styles.addOfficialText}>+ Add Official</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.refereeText}>{changes.referee2 || data.referee2}</Text>
-                  )}
-                </View>
-              </View>
-              <View style={styles.refereesRow}>
-                <View style={styles.refereeContainer}>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('linesperson1')}>
-                    <Ionicons name="remove-circle" size={24} color="red" />
-                  </TouchableOpacity>
-                  <Image
-                    source={{ uri: changes.linesperson1Photo || data.linesperson1Photo || 'https://via.placeholder.com/150' }}
-                    style={styles.profileImageLines}
-                  />
-                  {changes.linesperson1 === null ? (
-                    <TouchableOpacity onPress={() => handleAddOfficial('linesperson1')}>
-                      <Text style={styles.addOfficialText}>+ Add Official</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.refereeText}>{changes.linesperson1 || data.linesperson1}</Text>
-                  )}
-                </View>
-                <View style={styles.refereeContainer}>
-                  <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('linesperson2')}>
-                    <Ionicons name="remove-circle" size={24} color="red" />
-                  </TouchableOpacity>
-                  <Image
-                    source={{ uri: changes.linesperson2Photo || data.linesperson2Photo || 'https://via.placeholder.com/150' }}
-                    style={styles.profileImageLines}
-                  />
-                  {changes.linesperson2 === null ? (
-                    <TouchableOpacity onPress={() => handleAddOfficial('linesperson2')}>
-                      <Text style={styles.addOfficialText}>+ Add Official</Text>
-                    </TouchableOpacity>
-                  ) : (
-                    <Text style={styles.refereeText}>{changes.linesperson2 || data.linesperson2}</Text>
-                  )}
-                </View>
-              </View>
+          <View style={styles.centeredContent}>
+            <Text style={styles.gameNumber}>Game {gameData.gameID}</Text>
+            <Text style={styles.gameText}>{gameData.gameDate}</Text>
+            <View style={styles.teamsContainer}>
+              <Text style={styles.teamAbbr}>{gameData.awayTeamData?.abbreviation}</Text>
+              <Text style={styles.atSymbol}>@</Text>
+              <Text style={styles.teamAbbr}>{gameData.homeTeamData?.abbreviation}</Text>
             </View>
-          ))}
+            <Text style={styles.gameText}>{gameData.gameTime} {gameData.homeTeamData.timeZone}</Text>
+          </View>
+          <Text style={styles.titles}>Officials Crew</Text>
+          <View style={styles.refereesRow}>
+            <View style={styles.refereeContainer}>
+              <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('referee1')}>
+                <Ionicons name="remove-circle" size={24} color="red" />
+              </TouchableOpacity>
+              <Image
+                source={{ uri: changes.referee1Photo || gameData.officials?.referee1?.rosterPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.profileImageRef}
+              />
+              {changes.referee1 === null ? (
+                <TouchableOpacity onPress={() => handleAddOfficial('referee1')}>
+                  <Text style={styles.addOfficialText}>+ Add Official</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.refereeText}>{changes.referee1 || gameData.referee1}</Text>
+              )}
+            </View>
+            <View style={styles.refereeContainer}>
+              <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('referee2')}>
+                <Ionicons name="remove-circle" size={24} color="red" />
+              </TouchableOpacity>
+              <Image
+                source={{ uri: changes.referee2Photo || gameData.officials?.referee2?.rosterPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.profileImageRef}
+              />
+              {changes.referee2 === null ? (
+                <TouchableOpacity onPress={() => handleAddOfficial('referee2')}>
+                  <Text style={styles.addOfficialText}>+ Add Official</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.refereeText}>{changes.referee2 || gameData.referee2}</Text>
+              )}
+            </View>
+          </View>
+          <View style={styles.refereesRow}>
+            <View style={styles.refereeContainer}>
+              <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('linesperson1')}>
+                <Ionicons name="remove-circle" size={24} color="red" />
+              </TouchableOpacity>
+              <Image
+                source={{ uri: changes.linesperson1Photo || gameData.officials?.linesperson1?.rosterPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.profileImageLines}
+              />
+              {changes.linesperson1 === null ? (
+                <TouchableOpacity onPress={() => handleAddOfficial('linesperson1')}>
+                  <Text style={styles.addOfficialText}>+ Add Official</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.refereeText}>{changes.linesperson1 || gameData.linesperson1}</Text>
+              )}
+            </View>
+            <View style={styles.refereeContainer}>
+              <TouchableOpacity style={styles.removeButton} onPress={() => handleRemoveOfficial('linesperson2')}>
+                <Ionicons name="remove-circle" size={24} color="red" />
+              </TouchableOpacity>
+              <Image
+                source={{ uri: changes.linesperson2Photo || gameData.officials?.linesperson2?.rosterPhoto || 'https://via.placeholder.com/150' }}
+                style={styles.profileImageLines}
+              />
+              {changes.linesperson2 === null ? (
+                <TouchableOpacity onPress={() => handleAddOfficial('linesperson2')}>
+                  <Text style={styles.addOfficialText}>+ Add Official</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.refereeText}>{changes.linesperson2 || gameData.linesperson2}</Text>
+              )}
+            </View>
+          </View>
         </ScrollView>
         {Object.keys(changes).length > 0 && (
           <TouchableOpacity style={styles.saveButton} onPress={handleSaveChanges}>
@@ -330,7 +314,7 @@ const GameID = () => {
         <SafeAreaView style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.5)'}}>
           <View style={styles.modalView}>
             <FlatList
-              data={rosterData}
+              data={rosterData.sort((a, b) => a.lastFirstFullName.localeCompare(b.lastFirstFullName))}
               renderItem={renderOfficialItem}
               keyExtractor={item => item.id}
               style={{flex: 1}}
@@ -436,7 +420,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#ffffff',
-    marginHorizontal: 10,
+    margin: 10,
   },
   atSymbol: {
     fontSize: 18,

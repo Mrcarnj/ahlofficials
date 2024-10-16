@@ -14,6 +14,7 @@ interface RosterData {
   phoneNumber: string;
   uid: string;
   rosterPhoto: string;
+  role: string;
 }
 
 interface TeamData {
@@ -60,48 +61,46 @@ interface AppContextType {
   userData: RosterData | null;
   games: { [key: string]: GameData };
   loading: boolean;
+  fetchAllGamesForAdmin: () => Promise<{ [key: string]: GameData }>;
 }
 
 const AppContext = createContext<AppContextType>({
   userData: null,
   games: {},
   loading: true,
+  fetchAllGamesForAdmin: async () => ({}),
 });
 
 export const useAppContext = () => useContext(AppContext);
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [userData, setUserData] = useState<RosterData | null>(null);
-  const [games, setGames] = useState<{ [key: string]: GameData }>({});
-  const [loading, setLoading] = useState(true);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (user?.email) {
-        setLoading(true);
-        try {
-          // Fetch user's roster data
-          const userRosterData = await fetchUserRosterData(user.email);
-          setUserData(userRosterData);
-
-          if (userRosterData) {
-            // Fetch schedule data for the user
-            const scheduleData = await fetchScheduleData(userRosterData.lastFirstFullName);
-            
-            // Fetch additional data for all games in batch
-            const gamesData = await fetchAllGamesData(scheduleData);
-            setGames(gamesData);
-          }
-        } catch (error) {
-          console.error("Error fetching data:", error);
-        } finally {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchData();
+export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {                                                                                                                                                                                                      
+  const [userData, setUserData] = useState<RosterData | null>(null);                                                                                                                                                                                                                         
+  const [games, setGames] = useState<{ [key: string]: GameData }>({});                                                                                                                                                                                                                       
+  const [loading, setLoading] = useState(true);                                                                                                                                                                                                                                              
+  const { user } = useAuth();                                                                                                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                             
+  useEffect(() => {                                                                                                                                                                                                                                                                          
+    const fetchData = async () => {                                                                                                                                                                                                                                                          
+      if (user?.email) {                                                                                                                                                                                                                                                                     
+        setLoading(true);                                                                                                                                                                                                                                                                    
+        try {                                                                                                                                                                                                                                                                                
+          const userRosterData = await fetchUserRosterData(user.email);                                                                                                                                                                                                                      
+          setUserData(userRosterData);                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                             
+          if (userRosterData) {                                                                                                                                                                                                                                                              
+            const scheduleData = await fetchScheduleData(userRosterData.lastFirstFullName);                                                                                                                                                                                                  
+            const gamesData = await fetchAllGamesData(scheduleData);                                                                                                                                                                                                                         
+            setGames(gamesData);                                                                                                                                                                                                                                                             
+          }                                                                                                                                                                                                                                                                                  
+        } catch (error) {                                                                                                                                                                                                                                                                    
+          console.error("Error fetching data:", error);                                                                                                                                                                                                                                      
+        } finally {                                                                                                                                                                                                                                                                          
+          setLoading(false);                                                                                                                                                                                                                                                                 
+        }                                                                                                                                                                                                                                                                                    
+      }                                                                                                                                                                                                                                                                                      
+    };                                                                                                                                                                                                                                                                                       
+                                                                                                                                                                                                                                                                                             
+    fetchData();                                                                                                                                                                                                                                                                             
   }, [user]);
 
   // Fetch user's roster data
@@ -189,50 +188,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Fetch team data for multiple cities in batch
+  // Fetch team data for multiple cities in batches
   const fetchTeamsData = async (cities: string[]): Promise<{ [key: string]: TeamData }> => {
     const teamsData: { [key: string]: TeamData } = {};
     if (cities.length === 0) return teamsData;
 
     const teamsRef = collection(FIRESTORE_DB, 'teams');
-    const q = query(teamsRef, where('city', 'in', cities));
-    const querySnapshot = await getDocs(q);
+  
+    // Process cities in batches of 30
+    for (let i = 0; i < cities.length; i += 30) {
+      const batch = cities.slice(i, i + 30);
+      const q = query(teamsRef, where('city', 'in', batch));
+      const querySnapshot = await getDocs(q);
     
-    querySnapshot.forEach(doc => {
-      const data = doc.data() as TeamData;
-      teamsData[data.city] = { ...data, id: doc.id };
-    });
+      querySnapshot.forEach(doc => {
+        const data = doc.data() as TeamData;
+        teamsData[data.city] = { ...data, id: doc.id };
+      });
+    }
 
-    console.log('Fetched teams data:', teamsData); // Add this line for debugging
+    console.log('Fetched teams data:', teamsData);
     return teamsData;
   };
 
-  // Fetch officials' data in batch
+  // Fetch officials' data in batches
   const fetchOfficialsData = async (officialNames: string[]): Promise<{ [key: string]: RosterData }> => {
     const officialsData: { [key: string]: RosterData } = {};
     if (officialNames.length === 0) return officialsData;
 
     const rosterRef = collection(FIRESTORE_DB, 'roster');
-    const q = query(rosterRef, where('lastFirstFullName', 'in', officialNames));
-    const querySnapshot = await getDocs(q);
 
-    querySnapshot.forEach(doc => {
-      const data = doc.data() as RosterData;
-      officialsData[data.lastFirstFullName] = { 
-        ...data, 
-        uid: doc.id,
-        rosterPhoto: data.rosterPhoto || '' // Ensure rosterPhoto is always defined
-      };
-    });
+    // Process official names in batches of 30
+    for (let i = 0; i < officialNames.length; i += 30) {
+      const batch = officialNames.slice(i, i + 30);
+      const q = query(rosterRef, where('lastFirstFullName', 'in', batch));
+      const querySnapshot = await getDocs(q);
+
+      querySnapshot.forEach(doc => {
+        const data = doc.data() as RosterData;
+        officialsData[data.lastFirstFullName] = { 
+          ...data, 
+          uid: doc.id,
+          rosterPhoto: data.rosterPhoto || '' // Ensure rosterPhoto is always defined
+        };
+      });
+    }
 
     console.log('Fetched officials data:', officialsData);
     return officialsData;
   };
 
+  const fetchAllGamesForAdmin = async (): Promise<{ [key: string]: GameData }> => {                                                                                                                                                                                                          
+    try {                                                                                                                                                                                                                                                                                    
+      const scheduleRef = collection(FIRESTORE_DB, 'schedule');                                                                                                                                                                                                                              
+      const scheduleSnapshot = await getDocs(scheduleRef);                                                                                                                                                                                                                                   
+      const scheduleData = scheduleSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ScheduleData));                                                                                                                                                                                
+                                                                                                                                                                                                                                                                                             
+      const gamesData = await fetchAllGamesData(scheduleData);                                                                                                                                                                                                                               
+      return gamesData;                                                                                                                                                                                                                                                                      
+    } catch (error) {                                                                                                                                                                                                                                                                        
+      console.error("Error fetching all games for admin:", error);                                                                                                                                                                                                                           
+      throw error;                                                                                                                                                                                                                                                                           
+    }                                                                                                                                                                                                                                                                                        
+  };
+
   return (
-    <AppContext.Provider value={{ userData, games, loading }}>
-      {children}
-    </AppContext.Provider>
+    <AppContext.Provider value={{ userData, games, loading, fetchAllGamesForAdmin }}>                                                                                                                                                                                                        
+       {children}                                                                                                                                                                                                                                                                             
+     </AppContext.Provider>
   );
 };
 
