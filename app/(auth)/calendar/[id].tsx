@@ -117,14 +117,14 @@ const GamePage = () => {
             source={{ uri: game.officials.referee1?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
-          <Text style={styles.refereeText}>{game.officials.referee1?.lastFirstFullName || 'N/A'}</Text>
+          <Text style={styles.refereeText}>{game.officials.referee1?.firstName|| 'N/A'} {game.officials.referee1?.lastName || 'N/A'}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
             source={{ uri: game.officials.referee2?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageRef}
           />
-          <Text style={styles.refereeText}>{game.officials.referee2?.lastFirstFullName || 'N/A'}</Text>
+          <Text style={styles.refereeText}>{game.officials.referee2?.firstName || 'N/A'} {game.officials.referee2?.lastName || 'N/A'}</Text>
         </View>
       </View>
       <View style={styles.refereesRow}>
@@ -133,14 +133,14 @@ const GamePage = () => {
             source={{ uri: game.officials.linesperson1?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
-          <Text style={styles.refereeText}>{game.officials.linesperson1?.lastFirstFullName || 'N/A'}</Text>
+          <Text style={styles.refereeText}>{game.officials.linesperson1?.firstName || 'N/A'} {game.officials.linesperson1?.lastName || 'N/A'}</Text>
         </View>
         <View style={styles.refereeContainer}>
           <Image
             source={{ uri: game.officials.linesperson2?.rosterPhoto || 'https://via.placeholder.com/150' }}
             style={styles.profileImageLines}
           />
-          <Text style={styles.refereeText}>{game.officials.linesperson2?.lastFirstFullName || 'N/A'}</Text>
+          <Text style={styles.refereeText}>{game.officials.linesperson2?.firstName || 'N/A'} {game.officials.linesperson2?.lastName || 'N/A'}</Text>
         </View>
       </View>
       <View style={styles.separator} />
