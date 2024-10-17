@@ -13,6 +13,8 @@ const Login = () => {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(FIREBASE_AUTH, email, password);
+      // The AppContext will automatically update when the auth state changes
+      // You can optionally call refreshUserData if you want to force a refresh
       await refreshUserData();
     } catch (error) {
       console.log("ERROR: ", error)
